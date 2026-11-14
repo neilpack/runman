@@ -173,8 +173,10 @@ See [the implementation handoff](DATABASE_IMPLEMENTATION.md) for scope and picku
 For manual Lambda + API Gateway setup using the existing LabRole, follow
 [backend deployment preparation](BACKEND_DEPLOYMENT.md). `npm run package:backend`
 creates the ignored upload ZIP and runs offline handler checks; it deploys nothing.
-Run `npm run test:cassette-frontend` for offline client/store tests. Live database
-save/reload, two-account isolation, and real email flows still need manual verification.
+Run `npm run test:cassette-frontend` for offline client/store tests. The user has
+confirmed live save/reload, stale-save conflict, and account separation; public API
+and CORS checks also passed. See the handoff for the precise tested scope and
+remaining direct-API/pagination checks. Audio authorization remains separate.
 
 The retained Express `/api/items` example has no authentication or per-user ownership
 and is **disabled by default**. For local examples only, set both `NODE_ENV=development`

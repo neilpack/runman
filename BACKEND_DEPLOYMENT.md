@@ -127,6 +127,11 @@ Vite embeds this public URL at build time. Keep the existing public Cognito conf
 
 ## 6. User-run live verification (checkpoint 5)
 
+Status, 2026-11-14: public health/authentication/CORS checks passed. The user reports
+save/reload, stale-save conflicts, and second-account library/editor isolation work.
+See [the verification record](DATABASE_IMPLEMENTATION.md#step-5-live-verification--2026-11-14)
+for attribution and additional live checks that have not been performed.
+
 - Open `/api/health`: expect 200. Unsigned `/api/cassettes`: expect 401, not 503.
 - Sign in, create a library-only tape, choose **Save to account**, then reload the
   page and confirm its full appearance and ordered tracks return. Inspect the

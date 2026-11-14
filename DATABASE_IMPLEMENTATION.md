@@ -87,8 +87,10 @@ object key. No identity-pool key prefix is assumed by this schema.
    retain originals, and never silently claim/import them as cloud-owned.
 4. **Complete locally:** LabRole-only API deployment preparation. The user creates
    the database themselves using `DATABASE_CONSOLE_SETUP.md`; agents do not provision it.
-5. **Next approval:** user-run provisioning and live two-account isolation, conflicts,
-   pagination, save/reload, and safe audio-reference rejection/integration.
+5. **Core live checks confirmed:** user-run deployment and reported save/reload,
+   stale-save conflict, and account separation. Public API/CORS checks passed.
+   Direct cross-account write/delete attempts, stale deletes, live pagination, and
+   private-audio rejection remain additional live checks; audio integration is separate.
 
 ## Progress / pickup
 Step 1 source and local checks are complete: `npm run test:cassettes` (17 tests),
@@ -158,4 +160,27 @@ the loaded page is the whole library. Latest verification: 127 tests across
 schema (18), cassette API (16), frontend (22), auth (30), audio (19), account (9),
 legacy API (10), packaging (3); root typecheck/build and offline ZIP smoke passed.
 An independent ZIP reader verified the one-entry archive and both SHA-256 hashes.
-No live AWS tests were run; local Node smoke does not prove Lambda runtime/IAM access.
+At packaging time no live AWS tests had run; local Node smoke alone does not prove
+Lambda runtime/IAM access. See the subsequent live verification below.
+
+## Step 5 live verification — 2026-11-14
+
+The user deployed the resources through the console. An initial cassette 503 was
+resolved by correcting Lambda variable spelling/values and adding missing cassette
+settings; local `.env` configuration does not configure Lambda automatically.
+
+Agent-run read-only HTTP checks passed: `/api/health` 200, unsigned
+`/api/cassettes` 401, `/api/items` 404, allowed-origin preflight 204 with the expected
+PUT/Authorization/Content-Type allowance, and disallowed-origin preflight without
+an allow-origin header. Tested allowed frontend origin: `http://localhost:5173`.
+
+The user confirmed a signed-in tape save appeared in DynamoDB, then reported the
+requested page reload, two-tab stale-save conflict, and second-account list/editor
+isolation tests worked. These authenticated tests were user-run, not independently
+executed by the agent. No passwords, access tokens, or AWS keys were requested.
+
+Do not infer live coverage of direct cross-account PUT/DELETE, stale DELETE,
+multi-page pagination, or private-audio rejection from those confirmations. Those
+paths have offline coverage but still need targeted live testing if required.
+Audio/S3 authorization remains a separate follow-up; agents made no AWS resource
+changes. Preserve the user's uncommitted backend environment-example edit.
