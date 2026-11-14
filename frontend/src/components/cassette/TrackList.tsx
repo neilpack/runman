@@ -94,11 +94,11 @@ export function TrackList({ cassette, side, onSideChange, onChange }: TrackListP
       {
         id: newId(),
         title: metadata.name.replace(/\.[^/.]+$/, '') || 'Uploaded audio',
-        artist: 'Your upload',
+        artist: reference.source === 'recording' ? 'Your recording' : 'Your upload',
         durationSec: metadata.durationSec,
         audioReference: reference,
         side,
-        source: 'upload',
+        source: reference.source,
       },
     ]);
   };
