@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import { Cassette3D } from '@/components/cassette/Cassette3D';
 import { StickerIcon } from '@/components/cassette/StickerIcon';
+import { useFlickSpin } from '@/hooks/useFlickSpin';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { FLYING_STICKERS, RETRO_LOOKS } from './retroLooks';
 import './retroStage.css';
@@ -26,6 +27,13 @@ export function RetroCassetteStage() {
   const [index, setIndex] = useState(0);
   const [peeling, setPeeling] = useState(false);
   const look = RETRO_LOOKS[index];
+  const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
+  // Same axis and tilt as before (one turn per 8s); the user can flick or drag it around.
+  const { targetRef, handlers } = useFlickSpin<HTMLDivElement>({
+    tiltX: -14,
+    idleSpeed: reduceMotion ? 0 : -360 / 8,
+    startAngle: reduceMotion ? -24 : 0,
+  });
 
   useEffect(() => {
     setPeeling(false);
@@ -61,7 +69,7 @@ export function RetroCassetteStage() {
       </div>
 
       <div className="wc-float">
-        <div className="wc-spin">
+        <div ref={targetRef} className="wc-spin">
           {/* Keyed so each new look pops in and its stickers slap on one by one. */}
           <div key={index} className={`wc-pop${peeling ? ' wc-peeling' : ''}`}>
             <Cassette3D cassette={look} width={width} rotateX={0} rotateY={0} spinning />
@@ -69,6 +77,8 @@ export function RetroCassetteStage() {
         </div>
       </div>
       <div className="wc-shadow" />
+      {/* Invisible, steady hit area: the tape itself turns edge-on, so it can't be the target. */}
+      <div className="wc-grab" {...handlers} />
     </div>
   );
 }

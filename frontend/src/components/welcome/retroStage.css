@@ -190,18 +190,25 @@
   }
 }
 
-/* Decreasing rotateY moves the front face right-to-left. */
+/* The Y-axis spin is driven per-frame by useFlickSpin; this is just the pre-JS pose. */
 .wc-spin {
-  animation: wc-spin 8s linear infinite;
+  transform: rotateX(-14deg);
 }
 
-@keyframes wc-spin {
-  from {
-    transform: rotateX(-14deg) rotateY(0deg);
-  }
-  to {
-    transform: rotateX(-14deg) rotateY(-360deg);
-  }
+/* Hover/drag target over the tape. The stage ignores the pointer; only this catches it. */
+.wc-grab {
+  position: relative;
+  z-index: 2;
+  width: calc(var(--wc-w) * 1.05);
+  height: calc(var(--wc-w) * 0.63 + 48px);
+  pointer-events: auto;
+  cursor: grab;
+  /* Vertical swipes still scroll the page on touch screens. */
+  touch-action: pan-y;
+}
+
+.wc-grab:active {
+  cursor: grabbing;
 }
 
 .wc-pop {
@@ -432,11 +439,7 @@
 
 /* ---------- Reduced motion: keep the colour swaps, drop the movement ---------- */
 @media (prefers-reduced-motion: reduce) {
-  .wc-spin {
-    animation: none;
-    transform: rotateX(-14deg) rotateY(-24deg);
-  }
-
+  /* useFlickSpin holds the tape still here; it only turns when the user spins it. */
   .wc-sun,
   .wc-float,
   .wc-shadow,
