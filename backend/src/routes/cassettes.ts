@@ -14,6 +14,7 @@ export interface CassetteApiOptions {
   verifier?: AccessTokenVerifier;
   clock?: () => string;
   authorizeAudio?: MediaAuthorizer;
+  retainSong?: (owner: string, id: string, cassetteId?: string) => Promise<void>;
 }
 
 /** Shared by every router that stores per-user records in the cassettes table (cassettes, profile). */
@@ -37,7 +38,7 @@ export function createCassettesRouter(options: CassetteApiOptions = {}) {
   const verifier = options.verifier ?? cachedAccessTokenVerifier(settings.userPoolId!, settings.clientId!);
   const repository = options.repository ?? (settings.storageMode === 'memory' ? createMemoryCassetteRepository() : createDynamoCassetteRepository(settings.tableName!));
   const context = `${settings.region}:${settings.userPoolId}:${settings.clientId}:${settings.storageMode}:${settings.tableName ?? 'local'}`;
-  const service = createCassettesService(repository, createCassetteCursor(settings.cursorSecret!, context), options.clock, options.authorizeAudio);
+  const service = createCassettesService(repository, createCassetteCursor(settings.cursorSecret!, context), options.clock, options.authorizeAudio, options.retainSong);
   router.use(cassetteAuth(verifier));
   const parse = express.json({ limit: '300kb', strict: true });
   router.use((req, res, next) => parse(req, res, (error: unknown) => {

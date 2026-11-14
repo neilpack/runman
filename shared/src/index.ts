@@ -7,6 +7,7 @@ export * from './mediaPersistence.js';
 export * from './mediaValidation.js';
 export * from './profilePersistence.js';
 export * from './explorePublishing.js';
+export * from './listening.js';
 import type { PublicTape } from './explorePublishing.js';
 
 /** Persist only after upload succeeds. Playback URLs are temporary browser state. */
@@ -210,6 +211,11 @@ export type ExploreCatalog = 's3' | 'dynamodb' | 'demo' | 'empty';
 
 /** A song a listener uploaded and made public. */
 export interface PublicSong {
+  provider?: 'explore' | 'jamendo';
+  sourceId?: string;
+  playCount?: number;
+  listenedMs?: number;
+  licenseUrl?: string;
   id: string;
   title: string;
   artist: string;
@@ -218,7 +224,7 @@ export interface PublicSong {
   artworkUrl?: string;
   /** True when audio streams from GET /api/explore/songs/:id/audio (a stable URL; safe to store on a Track). */
   hasAudio: boolean;
-  /** How many times listeners added it to a tape. Feeds trending. */
+  /** How many listeners added it to a tape, independent of play rankings. */
   addCount: number;
   publishedAt: string;
 }
