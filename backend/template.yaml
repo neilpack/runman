@@ -2,7 +2,10 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: runman backend — API Gateway (HTTP API) + Lambda + DynamoDB + S3
 
-# Deploy with the AWS SAM CLI from the backend/ folder:
+# Legacy reference only: NOT an approved AWS Academy Learner Lab deployment.
+# SAM would create an implicit IAM role; the lab forbids custom role creation.
+# Do not run the historical commands below for the standalone Cognito auth path.
+# Historical SAM commands from the backend/ folder:
 #   npm run sam:build
 #   npm run sam:deploy      (first time: guided; saves samconfig.toml)
 

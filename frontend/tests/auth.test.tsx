@@ -2,20 +2,34 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { Amplify, type ResourcesConfig } from 'aws-amplify';
 import { createAuthInitializer } from '../src/auth/configuration';
 import { SessionGuard } from '../src/auth/SessionGuard';
 
-const outputs = {
-  version: '1.4',
-  auth: {
-    aws_region: 'us-west-2',
-    user_pool_id: 'us-west-2_ExampleOnly',
-    user_pool_client_id: 'exampleclientonly',
+const publicConfig = {
+  region: 'us-west-2',
+  userPoolId: 'us-west-2_ExampleOnly',
+  userPoolClientId: 'exampleclientonly',
+};
+
+const expectedSdkConfig: ResourcesConfig = {
+  Auth: {
+    Cognito: {
+      userPoolId: publicConfig.userPoolId,
+      userPoolClientId: publicConfig.userPoolClientId,
+      loginWith: { email: true },
+      signUpVerificationMethod: 'code',
+      userAttributes: { email: { required: true } },
+      passwordFormat: {
+        minLength: 8, requireLowercase: true, requireUppercase: true,
+        requireNumbers: true, requireSpecialCharacters: true,
+      },
+    },
   },
 };
 
-test('missing or malformed outputs never initialize Amplify', () => {
-  for (const raw of [undefined, '', '{', 'null', '[]', '{}', JSON.stringify({ version: '1.4', auth: {} })]) {
+test('missing or malformed public config never initializes Amplify', () => {
+  for (const raw of [undefined, '', '{', 'null', '[]', '{}', JSON.stringify({ region: 'us-west-2' })]) {
     let calls = 0;
     const setup = createAuthInitializer(() => { calls++; })(raw);
     assert.equal(setup.ready, false);
@@ -23,12 +37,15 @@ test('missing or malformed outputs never initialize Amplify', () => {
   }
 });
 
-test('invalid pool, region, client or outputs version fails closed', () => {
+test('invalid IDs, region mismatch, and regions outside the lab fail closed', () => {
   const invalid = [
-    { ...outputs, version: '2' },
-    { ...outputs, auth: { ...outputs.auth, aws_region: 'not a region' } },
-    { ...outputs, auth: { ...outputs.auth, user_pool_id: 'us-east-1_Other' } },
-    { ...outputs, auth: { ...outputs.auth, user_pool_client_id: '' } },
+    { ...publicConfig, region: 'not a region' },
+    { ...publicConfig, region: 'eu-west-1', userPoolId: 'eu-west-1_ExampleOnly' },
+    { ...publicConfig, userPoolId: 'us-east-1_Other' },
+    { ...publicConfig, userPoolId: 'us-west-2_' },
+    { ...publicConfig, userPoolClientId: '' },
+    { ...publicConfig, userPoolClientId: 'invalid client' },
+    { ...publicConfig, userPoolClientId: 123 },
   ];
   for (const value of invalid) {
     const setup = createAuthInitializer(() => assert.fail('must not configure'))(JSON.stringify(value));
@@ -36,20 +53,58 @@ test('invalid pool, region, client or outputs version fails closed', () => {
   }
 });
 
-test('valid generated outputs initialize exactly once and preserve future resources', () => {
+test('valid public IDs map to user-pool-only SDK configuration exactly once', () => {
   let calls = 0;
-  const value = { ...outputs, custom: { example: 'preserved' } };
   const initialize = createAuthInitializer((actual) => {
     calls++;
-    assert.deepEqual(actual, value);
+    assert.deepEqual(actual, expectedSdkConfig);
   });
-  assert.deepEqual(initialize(JSON.stringify(value)), { ready: true });
-  assert.deepEqual(initialize(JSON.stringify(value)), { ready: true });
+  assert.deepEqual(initialize(JSON.stringify(publicConfig)), { ready: true });
+  assert.deepEqual(initialize(JSON.stringify(publicConfig)), { ready: true });
   assert.equal(calls, 1);
 });
 
+test('additional resource, identity-pool, endpoint, or secret fields are rejected', () => {
+  for (const extra of [
+    { identityPoolId: 'not-permitted' },
+    { credentials: { accessKeyId: 'NOT_REAL', secretAccessKey: 'NOT_REAL' } },
+    { clientSecret: 'NOT_REAL' },
+    { userPoolEndpoint: 'https://example.invalid' },
+    { Auth: { Cognito: { identityPoolId: 'not-permitted' } } },
+    { data: { api_key: 'NOT_REAL' } },
+  ]) {
+    const setup = createAuthInitializer(() => assert.fail('must not configure'))(
+      JSON.stringify({ ...publicConfig, ...extra }),
+    );
+    assert.deepEqual(setup, { ready: false, reason: 'invalid' });
+  }
+});
+
+test('actual Amplify SDK accepts standalone Cognito without identity-pool or AWS resource access', () => {
+  try {
+    const setup = createAuthInitializer((resources) => Amplify.configure(resources))(JSON.stringify(publicConfig));
+    assert.deepEqual(setup, { ready: true });
+    const actual = Amplify.getConfig();
+    assert.deepEqual(actual, expectedSdkConfig);
+    assert.equal('identityPoolId' in actual.Auth!.Cognito, false);
+    assert.equal('allowGuestAccess' in actual.Auth!.Cognito, false);
+    assert.equal('credentials' in actual, false);
+    assert.equal('Storage' in actual, false);
+    assert.equal('API' in actual, false);
+  } finally {
+    Amplify.configure({});
+  }
+});
+
+test('us-east-1 is also accepted when the user-pool region matches', () => {
+  const setup = createAuthInitializer(() => {})(JSON.stringify({
+    ...publicConfig, region: 'us-east-1', userPoolId: 'us-east-1_ExampleOnly',
+  }));
+  assert.deepEqual(setup, { ready: true });
+});
+
 test('SDK configuration errors leave sign-in unavailable', () => {
-  const setup = createAuthInitializer(() => { throw new Error('invalid SDK configuration'); })(JSON.stringify(outputs));
+  const setup = createAuthInitializer(() => { throw new Error('invalid SDK configuration'); })(JSON.stringify(publicConfig));
   assert.deepEqual(setup, { ready: false, reason: 'configuration-failed' });
 });
 

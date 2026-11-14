@@ -1,3 +1,5 @@
+// Legacy Gen 2 reference only. DO NOT DEPLOY in AWS Academy Learner Lab:
+// this path creates IAM/identity-pool resources beyond the approved lab setup.
 import { defineBackend } from '@aws-amplify/backend';
 import { auth } from './auth/resource.js';
 

@@ -1,95 +1,81 @@
-# Shared authentication deployment
+﻿# Learner Lab authentication: checkpoints 4A and 4B
 
-## Goal and current boundary
-Deploy the existing Cognito email/password backend and React identity UI together,
-then verify actual confirmation/reset emails and session behavior. This document
-and `amplify.yml` prepare that step; no AWS resources have been created or live
-authentication verified. Account access and deployment go-ahead are still required.
-Audio work belongs to another chat and is outside this deployment change.
+## Current boundary
+4A prepares local integration only. Keep Amplify's SDK/Authenticator, but connect
+it directly to a standalone Cognito user pool and public browser client. No pool,
+client, role, identity pool, hosting connection, or live authentication has been
+created or verified. **4B creation and live tests require another go-ahead.**
 
-## Before connecting AWS
-Review this feature branch and merge the approved authentication changes into
-`main`. The build rejects every other branch. Do not merge or deploy automatically
-as part of preparation. Use the team AWS account; do not share credentials in chat.
+The $50 AWS Academy Learner Lab allows the confirmed Cognito user-pool/client
+operations in `us-west-2` or `us-east-1`; prefer `us-west-2`. It does not allow
+custom IAM role creation. This authentication path does not use Gen 2/CDK/SAM.
+Do not deploy the retained scaffolds unchanged, start a sandbox, or create a backend
+deployment role. Other LabRole-based deployments require separate review. Amplify
+Hosting availability is unconfirmed. Audio belongs to another chat.
 
-The AWS Console route below does not require a local AWS CLI, local credentials,
-or a local Node installation. Those tools are needed only for optional local AWS
-operations. This machine currently lacks configured CLI access; cloud access has
-not been verified.
+## Lab access (future approved session)
+Start the Academy Learner Lab session and use its AWS Console link. This is not
+IAM Identity Center SSO. If an approved CLI workflow is later needed, use the
+lab-provided temporary credential method, if available, and configure it outside
+this repository. Refresh according to the lab instructions and credential expiry.
+Never paste them into chat, Git, `.env` browser variables, or JSON public config.
+The precreated `LabRole` is for supported server-side services, not browser access.
+No installation, login, profile write, or AWS request is performed by 4A.
 
-The team uses **IAM Identity Center (SSO)**. For a future local CLI workflow, first
-install AWS CLI v2 through an approved setup step, then run:
+## 4B user-pool/client settings to review before creation
 
-```bash
-aws configure sso --profile runman
-aws sso login --profile runman
-aws sts get-caller-identity --profile runman
+| Setting | Required value |
+|---|---|
+| Region | `us-west-2` preferred; `us-east-1` also supported by the local adapter |
+| Sign-in and registration | Email/password; self-registration enabled; email required and automatically verified |
+| Verification | Email code, including resend; no automatic confirmation shortcut |
+| Password policy | Minimum 8, requiring lowercase, uppercase, number, and special character (matches UI metadata) |
+| Recovery | Verified email for password reset |
+| Email delivery | Cognito default sender; no custom SES identity or custom sender Lambda |
+| MFA / social providers | Disabled for this agreed demo; no SMS role or external provider setup |
+| App type | SPA/public browser client; **no client secret** |
+| Explicit auth flows | `ALLOW_USER_SRP_AUTH` and `ALLOW_REFRESH_TOKEN_AUTH`; keep refresh-token rotation disabled for this flow |
+| Client attribute permissions | Read email and email verification; write required email; no custom attributes needed |
+| Domain / OAuth login | Not required: Authenticator uses Cognito APIs directly |
+| Identity pool / IAM roles | None for browser authentication; do not create or embed them |
+
+Confirm in the console that the actual app client has no secret: its ID alone
+cannot prove that. If lab permissions reject an operation, stop and report the
+exact failure; do not add roles, policies, or switch to a broader deployment path.
+
+## Public configuration and local build
+After approved pool/client creation, copy
+`frontend/cognito-config.example.json` to ignored `frontend/cognito-config.json`
+and replace the fake IDs. Only these public fields are accepted:
+
+```json
+{
+  "region": "us-west-2",
+  "userPoolId": "us-west-2_ExampleOnly",
+  "userPoolClientId": "examplebrowserclientonly"
+}
 ```
 
-Use the team's supplied SSO start/issuer URL, SSO region, account, and approved role
-at the prompts. The **SSO region can differ from the resource region**; choose
-`us-west-2` as the profile's default resource region. Check returned account/role
-metadata before deployment. Use SSO temporary credentials, not static access keys.
-These commands are instructions only; no CLI installation, login, or profile write
-has been performed. Console-only deployment remains available through team SSO.
+This is manually supplied config, not generated Amplify outputs. Its raw contents
+are embedded in the browser bundle: **never put secrets in the file**, even though
+the validator rejects unknown fields. There is no fallback to `amplify_outputs.json`.
+The adapter explicitly builds `Auth.Cognito` with no identity-pool, credentials,
+API, or storage configuration; this grants no access to private backend resources.
 
-## Console settings (after approval)
-Open Amplify Hosting in **US West (Oregon), `us-west-2`**, then Create new app and
-connect the GitHub repository. Review these fields before **Save and deploy**:
+Restart the dev server or rebuild after changing IDs. Missing/invalid config keeps
+sign-in unavailable and public pages usable. The example IDs are fake, not a live
+pool. Local `npm run build` and the frontend-only `amplify.yml` recipe execute no
+AWS provisioning commands. A clean hosted checkout has no ignored config and
+intentionally builds an unconfigured app. Config delivery and an allowed static
+host must be reviewed later; 4A does not establish a live Hosting deployment.
 
-| Field | Value |
-|---|---|
-| Repository / branch | `neilpack/runman` / `main` |
-| My app is a monorepo | Enabled |
-| App root | `frontend` |
-| `AMPLIFY_MONOREPO_APP_ROOT` | `frontend` (console normally sets this) |
-| Build image | Amazon Linux 2023, with Node 24 available |
-| Build specification | Repository root `amplify.yml`; do not replace it with detected frontend-only commands |
-| Backend deployment role | Gen 2 deployment service role with `AmplifyBackendDeployFullAccess`, or the team's equivalent approved permissions |
-| Branch/PR automation | Only `main`; no auto-created branch environments or PR backend previews |
-| Secrets / resource IDs | None to paste into frontend code or this repo; Amplify supplies `AWS_APP_ID` and `AWS_BRANCH` |
+## 4B live checks after creation is approved
+Record the pool/client public IDs, region, tested commit, and outcomes without
+passwords or tokens. Verify sign-up, rejection before email confirmation,
+confirmation/resend, password reset/new-password sign-in, reload/session refresh,
+sign-out, and switching between two accounts without previous-account UI.
+A later approved static host must support HTTPS and SPA routing for `/dashboard`.
+Cassette/file authorization is outside this authentication checkpoint.
 
-Do not set AWS access keys, `NODE_ENV`, or legacy-example flags as Hosting variables.
-Jamendo configuration is not required for this authentication checkpoint.
-
-The build selects Node 24, installs the root lockfile (including infrastructure
-dev dependencies), typechecks/tests, then deploys **only root `amplify/`**. The
-pipeline writes `frontend/amplify_outputs.json` before Vite builds `frontend/dist`.
-Only that dist directory is published. Outputs are generated, ignored by Git, and
-not cached. No SAM backend or personal sandbox is deployed. The pipeline deploys
-all definitions in root `amplify/`; review the approved `main` commit to confirm
-those definitions remain within this authentication checkpoint before deploying.
-`npm run build` remains a local build and does not invoke AWS.
-
-## Browser routes
-Under Hosting > Rewrites and redirects, add **200 rewrites** for `/dashboard`,
-`/dashboard/`, `/about`, and `/about/`, each targeting `/index.html`. Keep static
-assets unchanged and do not proxy or rewrite `/api/*` to the retained Express API.
-These rules are console settings, not part of the build-spec YAML. Refreshing or
-opening a dashboard URL directly must still load the React sign-in boundary.
-
-The Home page still has a retained local-API health example; its unavailable status
-on Hosting is not a Cognito failure. The Express health endpoint is not deployed
-by this auth-only configuration.
-
-## Verify after the first approved deployment
-Record the Hosting URL, branch/commit, backend region, and pass/fail results here
-without tokens or passwords:
-
-- Confirm the build used Node 24 and generated outputs before the frontend build.
-- Open Home/About and directly reload `/dashboard`; signed-out users see sign-in.
-- Sign up with a test email; verify confirmation/resend and rejection before confirmation.
-- Sign in, reload, sign out, then sign in with a second account; no previous account UI remains.
-- Complete password reset by email and confirm the new password works.
-- Confirm no extra branch backend or SAM stack was created. Cassette/file isolation
-  is a later data/storage check and must not be claimed as verified here.
-
-Optional local outputs retrieval after deployment: use the existing README command
-with the displayed Amplify App ID and authorized AWS profile, then restart/rebuild
-the frontend. Console deployment itself needs no local credentials.
-
-References: [monorepo build settings](https://docs.aws.amazon.com/amplify/latest/userguide/monorepo-configuration.html),
-[Node selection](https://docs.aws.amazon.com/amplify/latest/userguide/troubleshooting-general.html),
-[Gen 2 CLI](https://docs.amplify.aws/react/reference/cli-commands/),
-[backend service role](https://docs.aws.amazon.com/amplify/latest/userguide/amplify-service-role.html),
-[SPA rewrites](https://docs.aws.amazon.com/amplify/latest/userguide/redirect-rewrite-examples.html).
+References: [Cognito public app clients](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-settings-client-apps.html),
+[Cognito email delivery](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-email.html).
