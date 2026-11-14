@@ -91,3 +91,22 @@ export interface Cassette {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface MusicTrack {
+  id: string;
+  name: string;
+  artistName: string;
+  albumName?: string;
+  duration: number;
+  imageUrl?: string;
+  audioUrl?: string;
+  downloadUrl?: string;
+  licenseUrl?: string;
+}
+
+export interface MusicSearchResponse {
+  tracks: MusicTrack[];
+  total: number;
+  offset: number;
+  limit: number;
+}
