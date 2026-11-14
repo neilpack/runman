@@ -15,6 +15,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present && npm run typecheck:amplify",
     "typecheck:amplify": "tsc -p amplify/tsconfig.json",
     "test:auth": "tsc -p frontend/tsconfig.test.json && tsx --tsconfig frontend/tsconfig.test.json --test frontend/tests/auth.test.tsx",
+    "test:audio": "tsc -p frontend/tsconfig.test.json && tsx --tsconfig frontend/tsconfig.test.json --test frontend/tests/audioStorage.test.ts frontend/tests/recordAudio.test.ts",
     "test:legacy-api": "tsc -p backend/tsconfig.test.json && tsx --tsconfig backend/tsconfig.test.json --test backend/tests/legacyExamples.test.ts"
   },
   "devDependencies": {

@@ -26,7 +26,7 @@ outside this authentication chat.
 
 ## Current source boundaries
 Read `AGENTS.md` first. `frontend/` has once-before-render configuration, lazy-loaded
-Authenticator, private-session guards, sign-out, and an identity-only dashboard.
+Authenticator, private-session guards, sign-out, and a dashboard with local audio preview from the separate audio work.
 `backend/` retains examples: `/api/items` defaults off, requires exact development
 opt-in, and is always denied by AWS markers or the Lambda entry point. Health is
 public. `shared/` keeps API contracts. Local builds never provision AWS resources.
@@ -62,9 +62,22 @@ Keep data after judging unless cleanup is explicitly requested.
   no-provisioning assertions, ignore/example checks, and `git diff --check` passed.
   Actual SDK configuration has no identity-pool/credential/API/storage settings.
   Existing Vite auth-chunk size warning remains; no cloud/live-flow checks performed.
+- **Concurrent merge:** preserved remote audio commit `cbf2a6f` without changing its audio code. After integration, root typecheck/build, nine auth tests, and nineteen audio tests passed. Cloud audio remains unconnected by this user-pool-only configuration; see the imported audio notes below.
 - **Blockers:** 4B requires a separate creation go-ahead and actual lab Console access.
   Pool/client settings, default-sender email delivery, and live session flows remain unverified.
   Local AWS CLI is absent but not required for the Console path.
 - **Next:** report 4A results and wait before any 4B creation/live tests.
 - **Audio handoff:** another chat owns branch `feat/audio-storage`, worktree
   `.worktrees/audio-storage`; this chat must not coordinate or modify that work.
+
+## Imported audio handoff (prior architecture)
+Preserved from remote commit `cbf2a6f`; these are historical audio implementation notes, not current lab deployment instructions. Local dashboard preview is preserved. The cloud adapter still requires identity-pool/storage credentials and is not connected by the current user-pool-only authentication configuration. The other chat owns adapting that integration; no audio code is changed here.
+
+
+- User authorized audio step 1 implementation on `feat/audio-storage`; deployment remains prohibited. This supersedes the earlier planning-only note below.
+- Audio owns `amplify/storage/`, `frontend/src/audio/`, and audio tests. Shared edits are limited to registering `storage` alongside the existing `auth` in `amplify/backend.ts` and adding an independent `StoredAudioReference` contract. Preserve concurrent auth/data resources when integrating.
+- Contract proposal for persistence: store `StoredAudioReference` on uploaded/recorded tracks; retain cassette IDs across saves. Keys use Cognito **identity pool IDs**, not user pool `sub`. No cassette schema or authentication implementation changes in this task.
+- Local verification: `npm run test:audio` (10 tests), `npm run typecheck` (including Amplify), `npm run build`, `npm run test:auth` (6 tests), `npm run test:legacy-api` (9 tests), and `git diff --check` passed. Build retains the existing Vite auth chunk warning. No AWS calls or deployment were made.
+- Audio continuation: added browser microphone recording, file preview and reusable `AudioInput` upload/adoption control. Dashboard is local-preview-only until cassette persistence exists. Unmount cancels active work and clears playback/microphone resources through the existing keyed auth session; authentication files remain unchanged.
+- Continuation checks: `npm run test:audio` now passes 19 tests; `npm run test:auth` passes 6 tests; `npm run typecheck`, `npm run build`, and `git diff --check` pass. The existing large auth chunk warning remains. Actual browser microphone/permission UI and AWS integration have not been exercised.
+- Remaining integration: mount upload control in the future cassette editor, cassette save/delete coordination and durable cleanup retries, and live browser/two-account isolation/URL expiry checks. These are not claimed complete by this implementation.
