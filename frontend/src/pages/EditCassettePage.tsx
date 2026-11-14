@@ -113,6 +113,9 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
   const sync = useCassetteSync();
   const tapeSync = sync.tapes[cassette.id];
   const busy = Boolean(tapeSync?.saving || tapeSync?.deleting || tapeSync?.reloading);
+  const saveNeedsAttention = Boolean(tapeSync?.error || tapeSync?.conflict || tapeSync?.cloudMissing || sync.storageError);
+  const savePending = sync.status === 'authenticated' && Boolean(tapeSync?.saving || tapeSync?.dirty);
+  const saveLabel = saveNeedsAttention ? 'Changes need attention' : savePending ? 'Saving cassette...' : 'Cassette saved';
   const [finishing, setFinishing] = useState(false);
   const [saver] = useState(() => createEditorSaver(cassetteStore, cassette.id, sync.context));
   useEffect(() => {
@@ -326,7 +329,13 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
         <Link to="/library" className="studio-btn">
           ← Library
         </Link>
-        <span className="studio-muted editor-saved">{sync.status !== 'authenticated' ? 'Saved on this device' : tapeSync?.error || tapeSync?.conflict || tapeSync?.cloudMissing ? 'Changes need attention' : tapeSync?.saving || tapeSync?.dirty ? 'Saving...' : 'Saved'}</span>
+        <span className="editor-saved" data-state={saveNeedsAttention ? 'attention' : savePending ? 'saving' : 'saved'} role="status" aria-live="polite" title={sync.status === 'guest' ? 'Saved in this browser' : undefined}>
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            {saveNeedsAttention ? <path d="M10 5v6m0 3h.01" /> : savePending ? <path d="M10 5v5l3 2" /> : <path d="m5 10 3 3 7-7" />}
+            <circle cx="10" cy="10" r="8" />
+          </svg>
+          {saveLabel}
+        </span>
         <div className="row">
           <button type="button" className="studio-btn danger" disabled={busy} onClick={() => setConfirmingDelete(true)}>
             Delete

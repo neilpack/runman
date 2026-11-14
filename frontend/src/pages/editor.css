@@ -15,7 +15,31 @@
 }
 
 .editor-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: 1px solid color-mix(in srgb, var(--studio-accent) 28%, var(--studio-panel-2));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--studio-accent) 8%, var(--studio-panel));
+  color: var(--studio-text);
   font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.editor-saved svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: var(--studio-accent);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.editor-saved[data-state="saving"] svg {
+  stroke: var(--studio-muted);
 }
 
 /* Three panes on wide screens: customization | tape on the cutting mat | tracklist notepad */
