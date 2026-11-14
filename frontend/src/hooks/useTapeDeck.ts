@@ -19,6 +19,8 @@ import type { Cassette, TapeSide, Track } from '@runman/shared';
 import { nextLatched, type DeckControl } from '@/components/cassette/CassettePlayer';
 import { playSfx, startWinding } from '@/audio/sfx';
 import { createPlaybackController } from '@/audio/playbackController';
+import { MediaPlaybackError, playAudioSource, playbackFailureMessage } from '@/audio/mediaPlayback';
+import { playbackDiagnostic, probePlaybackSource, type PlaybackDiagnostic } from '@/audio/playbackDiagnostics';
 import { subscribeMediaAccount } from '@/auth/mediaContext';
 
 /** How many times faster than real time FF / REW move through the tape. */
@@ -44,6 +46,8 @@ export interface TapeDeck {
   seek(seconds: number): void;
   /** Jump to the start of the next (1) or previous (-1) song on this side. */
   skip(direction: 1 | -1): void;
+  diagnostic?: PlaybackDiagnostic;
+  clearDiagnostic(): void;
 }
 
 const playable = (t: Track) => Boolean(t.audioUrl || t.audioReference);
@@ -71,6 +75,9 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
   const [loading, setLoading] = useState(false);
   const [audioRunning, setAudioRunning] = useState(false);
   const [notice, setNotice] = useState<string>();
+  const [diagnostic, setDiagnostic] = useState<PlaybackDiagnostic>();
+  const diagnosticTicket = useRef(0);
+  const diagnosticProbe = useRef<AbortController | undefined>(undefined);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const tracksRef = useRef(tracks);
@@ -86,6 +93,8 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
   const opRef = useRef(0);
   const playback = useRef(createPlaybackController(resolveUrl));
   const errorRetry = useRef(false);
+  const mediaAttempt = useRef<AbortController | undefined>(undefined);
+  const startingPlayback = useRef(false);
   const windTimer = useRef<number | undefined>(undefined);
   const stopWindSound = useRef<(() => void) | undefined>(undefined);
   const noticeTimer = useRef<number | undefined>(undefined);
@@ -97,6 +106,34 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
       audioRef.current.preload = 'auto';
     }
     return audioRef.current;
+  };
+
+  const clearDiagnostic = () => {
+    diagnosticTicket.current++;
+    diagnosticProbe.current?.abort();
+    setDiagnostic(undefined);
+  };
+  const reportFailure = (error: unknown, stage: PlaybackDiagnostic['stage'], track: Track, sourceUrl?: string) => {
+    const ticket = ++diagnosticTicket.current;
+    diagnosticProbe.current?.abort();
+    const report = playbackDiagnostic(error, {
+      stage, track, retried: errorRetry.current, audio: audio(), userAgent: navigator.userAgent,
+    });
+    const probe = Boolean(sourceUrl && track.audioReference && stage !== 'playback-url' &&
+      !(error instanceof DOMException && error.name === 'NotAllowedError'));
+    if (probe) report.s3 = { outcome: 'checking' };
+    setDiagnostic(report);
+    console.error('[runman playback diagnostics]', JSON.stringify(report));
+    if (!probe || !sourceUrl) return;
+    const controller = new AbortController(); diagnosticProbe.current = controller;
+    let timedOut = false;
+    const timer = window.setTimeout(() => { timedOut = true; controller.abort(); }, 8000);
+    void probePlaybackSource(sourceUrl, controller.signal).then((result) => {
+      if (diagnosticTicket.current !== ticket) return;
+      const completed = { ...report, s3: timedOut ? { outcome: 'timeout' as const } : result };
+      setDiagnostic(completed);
+      console.error('[runman playback diagnostics]', JSON.stringify(completed));
+    }).finally(() => window.clearTimeout(timer));
   };
 
   const setLatched = (next: DeckControl[]) => {
@@ -118,7 +155,7 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
     noticeTimer.current = window.setTimeout(() => setNotice(undefined), NOTICE_MS);
   };
 
-  const isLoaded = (i: number) => loadedRef.current?.trackId === tracksRef.current[i]?.id;
+  const isLoaded = (i: number) => Boolean(loadedRef.current && tracksRef.current[i] && loadedRef.current.trackId === tracksRef.current[i].id);
 
   /** Length of song i: the real decoded length if it's loaded, else what the tape recorded. */
   const durationOf = (i: number) => {
@@ -142,6 +179,8 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
 
   const silence = () => {
     opRef.current += 1;
+    mediaAttempt.current?.abort();
+    startingPlayback.current = false;
     playback.current.cancelPending();
     setLoading(false);
     const a = audioRef.current;
@@ -162,32 +201,48 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
 
   const startPlaying = async (force = false) => {
     const op = ++opRef.current;
+    mediaAttempt.current?.abort();
+    const attempt = new AbortController();
+    mediaAttempt.current = attempt;
     const i = indexRef.current;
     const track = tracksRef.current[i];
     const cassetteId = cassetteIdRef.current;
     if (!track || !cassetteId) return;
+    startingPlayback.current = true;
     const a = audio();
-    const loaded = loadedRef.current;
-    const stale = force || !isLoaded(i) || !playback.current.isCurrent(cassetteId, track) ||
-      (loaded?.expiresAt !== undefined && loaded.expiresAt - Date.now() <= 15_000);
-    if (!force) errorRetry.current = false;
+    if (!force) { errorRetry.current = false; clearDiagnostic(); }
+    let stage: PlaybackDiagnostic['stage'] = 'playback-url';
+    let sourceUrl: string | undefined;
     try {
-      if (stale) setLoading(true);
+      setLoading(true);
       const resolved = await playback.current.resolve(cassetteId, track, { force });
       if (!resolved || op !== opRef.current) return;
-      if (stale) {
-        const { url, expiresAt } = resolved;
-        a.src = url;
-        loadedRef.current = { trackId: track.id, expiresAt };
-        setLoadedDuration(track.durationSec);
-      }
-      a.currentTime = posRef.current;
-      await a.play();
-      if (op === opRef.current) setLoading(false);
+      stage = 'media-start'; sourceUrl = resolved.url;
+      // Always reconcile the returned URL with the actual media element. A
+      // pre-request cache decision can be obsolete after renewal/cancellation.
+      await playAudioSource(a, resolved.url, posRef.current, attempt.signal, force);
+      if (op !== opRef.current) return;
+      loadedRef.current = { trackId: track.id, expiresAt: resolved.expiresAt };
+      setLoadedDuration(Number.isFinite(a.duration) ? a.duration : track.durationSec);
+      setLoading(false);
     } catch (err) {
       if (op !== opRef.current || (err instanceof DOMException && err.name === 'AbortError')) return;
-      if (stale) loadedRef.current = null;
-      halt(`CAN'T PLAY ${track.title}`);
+      // play() can reject before a media error event. Both paths need the same
+      // bounded renewal, and a failed source must never remain a usable cache hit.
+      const mediaFailure = err instanceof MediaPlaybackError || (err instanceof DOMException && err.name === 'NotSupportedError');
+      if (track.audioReference && mediaFailure && !errorRetry.current) {
+        errorRetry.current = true;
+        void startPlaying(true);
+        return;
+      }
+      loadedRef.current = null;
+      playback.current.invalidate();
+      reportFailure(err, stage, track, sourceUrl);
+      halt(playbackFailureMessage(err));
+      a.removeAttribute('src');
+      a.load();
+    } finally {
+      if (op === opRef.current) startingPlayback.current = false;
     }
   };
 
@@ -306,9 +361,11 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
 
   // A new tape or a flipped side starts over at the first song with every key up.
   useEffect(() => {
+    clearDiagnostic();
     stopWinding();
     opRef.current += 1;
     playback.current.invalidate();
+    mediaAttempt.current?.abort();
     errorRetry.current = false;
     const a = audioRef.current;
     if (a) {
@@ -326,9 +383,11 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
 
   // Auth callbacks run synchronously, before React switches the visible account.
   useEffect(() => subscribeMediaAccount(() => {
+    clearDiagnostic();
     stopWinding();
     opRef.current += 1;
     playback.current.invalidate();
+    mediaAttempt.current?.abort();
     const a = audioRef.current;
     a?.pause(); a?.removeAttribute('src'); a?.load();
     loadedRef.current = null;
@@ -394,6 +453,9 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
       }
     };
     const onError = () => {
+      // During loading, playAudioSource owns this error and its retry. The same
+      // native event must not initiate a second competing URL request here.
+      if (startingPlayback.current) return;
       const track = tracksRef.current[indexRef.current];
       if (!track || !latchedRef.current.includes('play') || latchedRef.current.includes('pause')) return;
       // One renewal per play/seek attempt; decoding or permission failures must
@@ -402,7 +464,14 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
         errorRetry.current = true;
         if (Number.isFinite(a.currentTime) && a.currentTime > 0) setPosition(a.currentTime);
         void startPlaying(true);
-      } else halt(`CAN'T PLAY ${track.title}`);
+      } else {
+        const failure = new MediaPlaybackError(a.error?.code ?? 4);
+        reportFailure(failure, 'media-playback', track, a.src);
+        loadedRef.current = null;
+        playback.current.invalidate();
+        halt(playbackFailureMessage(failure));
+        a.removeAttribute('src'); a.load();
+      }
     };
     a.addEventListener('play', onPlay);
     a.addEventListener('pause', onPause);
@@ -423,10 +492,13 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
   // Leaving the page stops the music.
   useEffect(
     () => () => {
+      diagnosticTicket.current++;
+      diagnosticProbe.current?.abort();
       stopWinding();
       window.clearTimeout(noticeTimer.current);
       opRef.current += 1;
       playback.current.invalidate();
+      mediaAttempt.current?.abort();
       audioRef.current?.pause();
       audioRef.current?.removeAttribute('src');
     },
@@ -457,5 +529,7 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
     press,
     seek,
     skip,
+    diagnostic,
+    clearDiagnostic,
   };
 }

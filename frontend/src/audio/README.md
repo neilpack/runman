@@ -66,6 +66,13 @@ S3 POST uses form fields, without a Cognito Authorization header or a manually
 set multipart Content-Type. The browser validates S3 destinations and response
 metadata before sending bytes or accepting references.
 
+Grant duration is validated against AWS signing timestamps, avoiding comparisons
+between Lambda's and the browser's wall clocks. Playback `expiresAt` from the
+client is a conservative browser-local cache deadline based on request start,
+signed duration and one second of timestamp rounding. S3 enforces actual expiry.
+Terminal failures show a persistent, copyable diagnostic panel with safe API/media
+codes and a bounded S3 range probe; no bearer grants or raw errors are included.
+
 The backend owns keys `private/<verified user sub>/media/<server UUID>`, enforces
 ownership, and pins a finalized S3 version. Cassette ID remains an editor-context
 argument, not part of the S3 key: same-owner cassette copies can reuse references.
