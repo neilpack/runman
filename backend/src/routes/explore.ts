@@ -15,6 +15,10 @@ import type { MediaService } from '../services/mediaService.js';
 import { createMemoryPublicCatalogRepository, type PublicCatalogRepository } from '../services/publicCatalogRepository.js';
 import { createPublishService, type PublishService } from '../services/publishService.js';
 import { cassetteSettingsReady } from './cassettes.js';
+import { createListeningService, type ListeningService } from '../services/listeningService.js';
+import { createMemoryListeningRepository, type ListeningRepository } from '../services/listeningRepository.js';
+import { createDynamoListeningRepository } from '../aws/dynamoListening.js';
+import { getJamendoTrack } from '../services/jamendoService.js';
 
 function parseInteger(value: unknown, fallback: number): number {
   if (value === undefined) return fallback;
@@ -38,7 +42,7 @@ function boundedLimit(value: unknown, fallback: number, max: number): number {
   return limit;
 }
 
-export function createExploreRouter(service: ExploreService, publishing?: { publisher: PublishService; auth: RequestHandler }) {
+export function createExploreRouter(service: ExploreService, publishing?: { publisher: PublishService; auth: RequestHandler; listening?: ListeningService }) {
   const router = Router();
 
   router.get('/songs', async (req, res) => {
@@ -97,6 +101,7 @@ export function createExploreRouter(service: ExploreService, publishing?: { publ
     const off = (_req: unknown, _res: unknown, next: (error: unknown) => void) => next(new HttpError(503, 'Explore publishing is not configured for this environment.'));
     router.use('/mine', off);
     router.post('/songs/:id/adds', off);
+    router.post('/plays/start', off); router.post('/plays/progress', off);
     return router;
   }
   const { publisher, auth } = publishing;
@@ -115,6 +120,19 @@ export function createExploreRouter(service: ExploreService, publishing?: { publ
   router.put('/mine/tapes/:id', async (req, res) => { res.json(await publisher.publishTape(owner(res), req.params.id, req.body)); });
   router.delete('/mine/tapes/:id', async (req, res) => { res.json(await publisher.unpublishTape(owner(res), req.params.id)); });
   router.post('/songs/:id/adds', auth, async (req, res) => { res.json(await publisher.recordAdd(owner(res), String(req.params.id))); });
+  const analyticsJson = express.json({ limit: '4kb', strict: true });
+  const analyticsBody: RequestHandler = (req, res, next) => analyticsJson(req, res, (error: unknown) => {
+    if (!error) return next();
+    next(new HttpError((error as { type?: string }).type === 'entity.too.large' ? 413 : 400, 'Invalid listening request body.'));
+  });
+  router.post('/plays/start', auth, analyticsBody, async (req, res) => {
+    if (!publishing.listening) throw new HttpError(503, 'Listening statistics are not configured.');
+    res.json(await publishing.listening.start(owner(res), req.body));
+  });
+  router.post('/plays/progress', auth, analyticsBody, async (req, res) => {
+    if (!publishing.listening) throw new HttpError(503, 'Listening statistics are not configured.');
+    res.json(await publishing.listening.progress(owner(res), req.body));
+  });
   return router;
 }
 
@@ -127,6 +145,9 @@ export interface ExploreApiOptions {
   media?: Pick<MediaService, 'authorize' | 'playback'>;
   /** Overrides everything above (tests): a plain read-only Explore. */
   source?: ExploreSource;
+  listeningRepository?: ListeningRepository;
+  jamendoLookup?: typeof getJamendoTrack;
+  listeningClock?: () => number;
 }
 
 /**
@@ -140,12 +161,17 @@ export function createExploreApi(options: ExploreApiOptions = {}) {
   const memory = settings.storageMode === 'memory';
   const repository = options.repository ?? (memory ? createMemoryPublicCatalogRepository() : createDynamoPublicCatalogRepository(settings.tableName!));
   const media = options.media;
+  const listeningRepository = options.listeningRepository ?? (memory ? createMemoryListeningRepository() : createDynamoListeningRepository(settings.tableName!));
+  const jamendo = options.jamendoLookup ?? getJamendoTrack;
   const source = createCatalogSource(repository, {
     catalog: memory ? 'demo' : 'dynamodb',
+    listeningStats: () => listeningRepository.listStats(),
+    jamendoAudio: async (id: string) => (await jamendo(id))?.audioUrl,
     ...(memory && config.explore.demoCatalog ? { extra: { songs: demoSongs(new Date()), profiles: demoProfiles() } } : {}),
     ...(media ? { playback: async (owner: string, mediaId: string) => (await media.playback(owner, { mediaId })).url } : {}),
   });
   const publisher = createPublishService(repository, { authorizeAudio: media?.authorize, clock: options.clock, onChange: () => source.invalidate() });
   const verifier = options.verifier ?? cachedAccessTokenVerifier(settings.userPoolId!, settings.clientId!);
-  return createExploreRouter(createExploreService(source), { publisher, auth: cassetteAuth(verifier) });
+  const listening = createListeningService(listeningRepository, repository, { jamendo, clock: options.listeningClock, changed: () => source.invalidate() });
+  return createExploreRouter(createExploreService(source), { publisher, auth: cassetteAuth(verifier), listening });
 }

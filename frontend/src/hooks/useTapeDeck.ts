@@ -22,6 +22,7 @@ import { createPlaybackController } from '@/audio/playbackController';
 import { MediaPlaybackError, playAudioSource, playbackFailureMessage } from '@/audio/mediaPlayback';
 import { playbackDiagnostic, probePlaybackSource, type PlaybackDiagnostic } from '@/audio/playbackDiagnostics';
 import { subscribeMediaAccount } from '@/auth/mediaContext';
+import { watchListening } from '@/audio/listeningRuntime';
 
 /** How many times faster than real time FF / REW move through the tape. */
 const WIND_SPEED = 16;
@@ -420,6 +421,10 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
       loadedRef.current = null;
     }
   }, [tracks]);
+
+  // Register analytics first: its final sample must see the ending track before
+  // transport handlers advance indexRef to the next song.
+  useEffect(() => watchListening(audio(), () => tracksRef.current[indexRef.current]), []);
 
   // Audio element events: smooth progress while playing, and songs running into each other.
   useEffect(() => {

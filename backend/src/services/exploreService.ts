@@ -40,6 +40,7 @@ import { getDownloadUrl, getObjectText, listObjectKeys } from '../aws/s3.js';
 import { config } from '../config.js';
 import { demoProfiles, demoSongs } from './exploreDemoData.js';
 import type { PublicCatalogRepository } from './publicCatalogRepository.js';
+import { listeningSongKey, type SongListeningStats } from './listeningRepository.js';
 
 export const TRENDING_COUNT = 5;
 export const PUBLIC_PREFIX = 'public/';
@@ -50,6 +51,11 @@ const AUDIO_URL_SECONDS = 3600;
 
 /** A public song as stored (song.json), after validation. */
 export interface SongRecord {
+  provider?: 'explore' | 'jamendo';
+  sourceId?: string;
+  playCount?: number;
+  listenedMs?: number;
+  licenseUrl?: string;
   id: string;
   title: string;
   artist: string;
@@ -263,6 +269,7 @@ function hit(field: string, token: string): number {
 
 const newest = (a: SongRecord, b: SongRecord) => b.publishedAt.localeCompare(a.publishedAt);
 const popularThenNewest = (a: SongRecord, b: SongRecord) => b.addCount - a.addCount || newest(a, b);
+export const mostPlayedFirst = (songs: SongRecord[]) => [...songs].sort((a, b) => (b.playCount ?? 0) - (a.playCount ?? 0) || (b.listenedMs ?? 0) - (a.listenedMs ?? 0) || newest(a, b) || a.id.localeCompare(b.id));
 
 export function newestFirst(songs: SongRecord[]): SongRecord[] {
   return [...songs].sort((a, b) => newest(a, b) || a.id.localeCompare(b.id));
@@ -274,7 +281,7 @@ export function newestFirst(songs: SongRecord[]): SongRecord[] {
  */
 export function searchSongs(songs: SongRecord[], q: string, usernameOf: (s: SongRecord) => string): SongRecord[] {
   const words = tokens(q);
-  if (words.length === 0) return newestFirst(songs);
+  if (words.length === 0) return mostPlayedFirst(songs);
   const phrase = words.join(' ');
 
   const scored: { song: SongRecord; score: number }[] = [];
@@ -297,20 +304,9 @@ export function searchSongs(songs: SongRecord[], q: string, usernameOf: (s: Song
   return scored.sort((a, b) => b.score - a.score || popularThenNewest(a.song, b.song)).map((s) => s.song);
 }
 
-/**
- * Top songs by adds, decayed by age (Hacker-News style), so a fresh song with a few adds can
- * overtake an old one with many. Falls back to newest when nothing has been added yet.
- */
-export function trendingSongs(songs: SongRecord[], now: Date, count = TRENDING_COUNT): SongRecord[] {
-  const score = (s: SongRecord) => {
-    const ageDays = Math.max(0, (now.getTime() - Date.parse(s.publishedAt)) / 86_400_000);
-    return s.addCount / (ageDays + 2) ** 1.5;
-  };
-  return [...songs]
-    .map((song) => ({ song, score: score(song) }))
-    .sort((a, b) => b.score - a.score || newest(a.song, b.song))
-    .slice(0, count)
-    .map((s) => s.song);
+/** Global qualified plays; listening time, recency and ID break ties deterministically. */
+export function trendingSongs(songs: SongRecord[], _now: Date, count = TRENDING_COUNT): SongRecord[] {
+  return mostPlayedFirst(songs).slice(0, count);
 }
 
 /** Tapes matching every word of `q` in the name, owner or track titles/artists; newest first. */
@@ -364,6 +360,7 @@ export function createExploreService(source: ExploreSource, now: () => Date = ()
     const songs = snapshot.songs.filter((s) => !s.unlisted);
     const byUser = new Map<string, PublicProfile>(profiles.map((p) => [p.userId, p]));
     for (const song of songs) {
+      if (song.provider === 'jamendo') continue;
       if (!byUser.has(song.uploaderId)) {
         byUser.set(song.uploaderId, {
           userId: song.uploaderId,
@@ -376,6 +373,9 @@ export function createExploreService(source: ExploreSource, now: () => Date = ()
     // The profile's username wins, so renames show up everywhere without rewriting song files.
     const usernameOf = (s: SongRecord) => byUser.get(s.uploaderId)?.username ?? s.uploaderUsername;
     const toPublic = (s: SongRecord): PublicSong => ({
+      ...(s.provider ? { provider: s.provider, sourceId: s.sourceId } : {}),
+      playCount: s.playCount ?? 0, listenedMs: s.listenedMs ?? 0,
+      ...(s.licenseUrl ? { licenseUrl: s.licenseUrl } : {}),
       id: s.id,
       title: s.title,
       artist: s.artist,
@@ -550,13 +550,14 @@ export type CatalogPlayback = (owner: string, mediaId: string) => Promise<string
  */
 export function createCatalogSource(
   repository: PublicCatalogRepository,
-  options: { catalog: ExploreCatalog; playback?: CatalogPlayback; extra?: Omit<ExploreSnapshot, 'tapes'>; ttlMs?: number; now?: () => number },
+  options: { catalog: ExploreCatalog; playback?: CatalogPlayback; extra?: Omit<ExploreSnapshot, 'tapes'>; ttlMs?: number; now?: () => number; listeningStats?(): Promise<SongListeningStats[]>; jamendoAudio?(id: string): Promise<string | undefined> },
 ): ExploreSource & { invalidate(): void } {
   const ttlMs = options.ttlMs ?? 15_000;
   const clock = options.now ?? Date.now;
   let cache: { at: number; value: Promise<ExploreSnapshot> } | undefined;
   async function fetchSnapshot(): Promise<ExploreSnapshot> {
-    const [songs, profiles, tapes] = await Promise.all([repository.listSongs(), repository.listProfiles(), repository.listTapes()]);
+    const [songs, profiles, tapes, stats] = await Promise.all([repository.listSongs(), repository.listProfiles(), repository.listTapes(), options.listeningStats?.() ?? Promise.resolve([])]);
+    const totals = new Map(stats.map((row) => [listeningSongKey(row.song), row]));
     return {
       songs: [
         ...(options.extra?.songs ?? []),
@@ -564,7 +565,13 @@ export function createCatalogSource(
           id: s.id, title: s.title, artist: s.artist, durationSec: s.durationSec, uploaderId: s.ownerId, uploaderUsername: s.uploaderUsername,
           // A private media key. Only this source presigns it, through the owner-checked media service.
           audioKey: s.audio.objectKey, artworkUrl: s.artworkUrl, addCount: s.addCount, publishedAt: s.publishedAt,
+          playCount: totals.get(`explore#${s.id}`)?.playCount ?? 0, listenedMs: totals.get(`explore#${s.id}`)?.listenedMs ?? 0,
           ...(s.listed ? {} : { unlisted: true }),
+        })),
+        ...stats.filter((row) => row.song.provider === 'jamendo').map((row): SongRecord => ({
+          id: `jamendo_${row.song.id}`, provider: 'jamendo', sourceId: row.song.id, title: row.song.title, artist: row.song.artist,
+          durationSec: row.song.durationSec, uploaderId: 'jamendo', uploaderUsername: 'Jamendo', audioKey: row.song.audioUrl,
+          artworkUrl: row.song.artworkUrl, licenseUrl: row.song.licenseUrl, addCount: 0, playCount: row.playCount, listenedMs: row.listenedMs, publishedAt: '1970-01-01T00:00:00.000Z',
         })),
       ],
       profiles: [...(options.extra?.profiles ?? []), ...profiles.map(({ updatedAt: _updatedAt, ...profile }) => profile)],
@@ -583,6 +590,7 @@ export function createCatalogSource(
       return cache.value;
     },
     async audioUrl(song) {
+      if (song.provider === 'jamendo' && song.sourceId) return options.jamendoAudio?.(song.sourceId);
       const selector = song.audioKey ? parseMediaObjectKey(song.audioKey) : undefined;
       if (!selector || selector.owner !== song.uploaderId || !options.playback) return undefined;
       return options.playback(song.uploaderId, selector.mediaId);

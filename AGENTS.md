@@ -38,6 +38,7 @@ Run from the repo root.
 | `npm run test:media` | Typecheck and test private media contracts, ledger and key invariants offline |
 | `npm run test:media-api` | Offline private media service, Dynamo/S3 ports, JWT/HTTP and cassette authorization tests |
 | `npm run test:audio` | Offline browser media API, direct upload, account/cancellation, recorder and playback tests |
+| `npm run test:discover` | Offline global listening totals, Dynamo transactions, playback sampling and Discover-to-tape saving |
 | `npm run test:cassette-api` | Offline JWT, owner-isolation, cursor, repository and profile API tests |
 | `npm run test:explore` | Offline Explore read API plus publishing (profiles, songs, tapes, adds) and its Dynamo commands |
 | `npm run test:cassette-frontend` | Cassette client/store and Explore publish-sync tests |

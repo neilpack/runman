@@ -116,8 +116,17 @@ export function ExplorePage() {
 }
 
 function SongsTab({ q, onAdd }: { q: string; onAdd: (song: PublicSong) => void }) {
-  const trending = useRemote((signal) => api.trendingSongs(signal), []);
-  const first = useRemote((signal) => api.exploreSongs({ q, limit: PAGE_SIZE }, signal), [q]);
+  const [statsVersion, setStatsVersion] = useState(0);
+  useEffect(() => {
+    const refresh = () => setStatsVersion((version) => version + 1);
+    window.addEventListener('runman:plays-updated', refresh); window.addEventListener('focus', refresh);
+    const timer = window.setInterval(refresh, 15_000);
+    return () => { window.clearInterval(timer); window.removeEventListener('runman:plays-updated', refresh); window.removeEventListener('focus', refresh); };
+  }, []);
+  const trending = useRemote((signal) => api.trendingSongs(signal), [statsVersion]);
+  const first = useRemote((signal) => api.exploreSongs({ q, limit: PAGE_SIZE }, signal), [q, statsVersion]);
+  const pageRequest = useRef(0);
+  useEffect(() => { pageRequest.current++; setMore({ q, songs: [] }); setLoadingMore(false); setMoreError(undefined); }, [q, statsVersion]);
 
   // Pages after the first, for the current query only.
   const [more, setMore] = useState<{ q: string; songs: PublicSong[] }>({ q: '', songs: [] });
@@ -128,15 +137,17 @@ function SongsTab({ q, onAdd }: { q: string; onAdd: (song: PublicSong) => void }
   const total = first.data?.total ?? 0;
 
   const loadMore = async () => {
+    const ticket = ++pageRequest.current;
     setLoadingMore(true);
     setMoreError(undefined);
     try {
       const page = await api.exploreSongs({ q, limit: PAGE_SIZE, offset: songs.length });
+      if (ticket !== pageRequest.current) return;
       setMore({ q, songs: [...extra, ...page.songs] });
     } catch (error) {
-      setMoreError(error instanceof Error ? error.message : 'Could not load more songs.');
+      if (ticket === pageRequest.current) setMoreError(error instanceof Error ? error.message : 'Could not load more songs.');
     } finally {
-      setLoadingMore(false);
+      if (ticket === pageRequest.current) setLoadingMore(false);
     }
   };
 
@@ -149,7 +160,7 @@ function SongsTab({ q, onAdd }: { q: string; onAdd: (song: PublicSong) => void }
       {!q && (
         <section className="ex-section" aria-labelledby="ex-trending-title">
           <h2 id="ex-trending-title" className="ex-section-title">
-            Trending now <span className="ex-flame" aria-hidden="true">🔥</span>
+            Most played <span className="ex-flame" aria-hidden="true">🔥</span>
           </h2>
           {trending.error ? (
             <LoadError what="trending songs" error={trending.error} onRetry={trending.retry} />
@@ -165,7 +176,7 @@ function SongsTab({ q, onAdd }: { q: string; onAdd: (song: PublicSong) => void }
 
       <section className="ex-section" aria-labelledby="ex-songs-title" aria-busy={first.loading}>
         <h2 id="ex-songs-title" className="ex-section-title">
-          {q ? <>Results for “{q}”</> : 'All shared songs'}
+          {q ? <>Results for “{q}”</> : 'Songs by global plays'}
           {first.data && <span className="ex-count">{total}</span>}
         </h2>
 
