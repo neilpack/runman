@@ -11,6 +11,7 @@ import { CatalogNote } from '@/components/explore/Listeners';
 import { LoadError } from '@/components/explore/LoadError';
 import { previewPlayer } from '@/components/explore/previewPlayer';
 import { SongList, SongListSkeleton } from '@/components/explore/Songs';
+import { TapeGrid } from '@/components/explore/Tapes';
 import { Avatar } from '@/components/profile/Avatar';
 import { useAccount } from '@/hooks/useAccount';
 import { useRemote } from '@/hooks/useRemote';
@@ -105,6 +106,17 @@ export function ListenerPage() {
               )}
             </section>
           </div>
+
+          <section className="ex-section" aria-labelledby="ex-their-tapes">
+            <h2 id="ex-their-tapes" className="ex-section-title">
+              Public tapes <span className="ex-count">{page.tapes.length}</span>
+            </h2>
+            {page.tapes.length === 0 ? (
+              <p className="muted">@{page.profile.username} hasn't shared a tape yet.</p>
+            ) : (
+              <TapeGrid tapes={page.tapes} showOwner={false} />
+            )}
+          </section>
         </>
       )}
 

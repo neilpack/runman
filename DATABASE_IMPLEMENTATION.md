@@ -256,3 +256,14 @@ Public tapes, songs and profiles now live in the cassettes table (contract and l
   browse UI for public tapes yet (`api.exploreTapes` / `api.publicTape` exist); `EXPLORE#ADD#…`
   rows stay after a song is unpublished; LabRole needs `dynamodb:TransactWriteItems` and `Query`
   on the table.
+
+### Whole-tape sharing — 2026-11-14
+
+A public tape now shares every track. The owner's uploads/recordings (public or private) become
+`community` tracks backed by an **unlisted** `EXPLORE#SONG` row (`listed: false`): they stream via
+`/api/explore/songs/:id/audio` but stay out of song lists, search, trending and listener song counts.
+Sharing a song on its own sets `listed: true`; a tape upsert never unlists it. Making a listed song
+private unlists it while a public tape still uses it, otherwise deletes it. Republishing or
+unpublishing a tape deletes unlisted songs no remaining public tape of that owner uses. Rows
+without `listed` read as listed. Explore has a **Tapes** tab, `/explore/tapes/:id` (preview tracks,
+"Add to my library" via `cassetteFromPublicTape`), and listener pages list public tapes.

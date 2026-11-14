@@ -3,7 +3,7 @@
 import { createHash } from 'node:crypto';
 import {
   validatePublishProfileRequest, validatePublishSongRequest, validatePublishTapeRequest, validateUnpublishSongRequest,
-  type CassetteValidationResult, type PublicSong, type PublicTapeTrack, type PublishProfileResponse, type PublishSongResponse,
+  type CassetteValidationResult, type PublicSong, type PublicTape, type PublicTapeTrack, type PublishProfileResponse, type PublishSongResponse,
   type PublishTapeResponse, type RecordSongAddResponse, type UnpublishResponse,
 } from '@runman/shared';
 import { HttpError } from '../middleware/errorHandler.js';
@@ -47,6 +47,22 @@ export function createPublishService(repository: PublicCatalogRepository, option
     if (!profile) throw new HttpError(409, 'Publish your Explore profile (pick a username) before sharing songs or tapes.');
     return profile;
   }
+  const songIdsOf = (tape: PublicTape) => tape.tape.tracks.flatMap((t) => (t.provider === 'explore' ? [t.sourceId] : []));
+  /** Song ids the owner's public tapes still play. */
+  async function tapeSongIds(owner: string) {
+    const tapes = (await repository.listTapes()).filter((t) => t.owner.userId === owner);
+    return new Set(tapes.flatMap(songIdsOf));
+  }
+  /** Deletes the owner's unlisted songs among `candidates` that no public tape of theirs uses any more. */
+  async function dropUnusedSongs(owner: string, candidates: string[]) {
+    if (!candidates.length) return;
+    const used = await tapeSongIds(owner);
+    for (const id of new Set(candidates)) {
+      if (used.has(id)) continue;
+      const song = await repository.getSong(id);
+      if (song && song.ownerId === owner && !song.listed) await repository.deleteSong(id, owner);
+    }
+  }
   function cassetteId(value: string) {
     if (!/^[a-zA-Z0-9_-]{1,128}$/.test(value)) throw new HttpError(400, 'Invalid cassette ID.');
     return value;
@@ -69,42 +85,57 @@ export function createPublishService(repository: PublicCatalogRepository, option
       return storage(async () => {
         await authorize(owner, request.audio);
         const profile = await publishedProfile(owner);
-        const item = await repository.putSong({ id: publicSongId(owner, request.audio.objectKey), ownerId: owner, uploaderUsername: profile.username, ...request }, clock());
+        const item = await repository.putSong({ id: publicSongId(owner, request.audio.objectKey), ownerId: owner, uploaderUsername: profile.username, ...request, listed: true }, clock());
         changed();
         return { song: toPublicSong(item, profile.username) };
       });
     },
 
+    /** Takes the song off Explore's lists. It keeps streaming only while one of your public tapes uses it. */
     async unpublishSong(owner: string, body: unknown): Promise<UnpublishResponse> {
       const { objectKey } = valid(validateUnpublishSongRequest(body));
       const id = publicSongId(owner, objectKey);
       return storage(async () => {
-        if (!await repository.deleteSong(id, owner)) throw new HttpError(404, 'That song is not on Explore.');
+        const song = await repository.getSong(id);
+        if (!song || song.ownerId !== owner || !song.listed) throw new HttpError(404, 'That song is not on Explore.');
+        if ((await tapeSongIds(owner)).has(id)) await repository.unlistSong(id, owner, clock());
+        else await repository.deleteSong(id, owner);
         changed();
         return { id };
       });
     },
 
     /**
-     * Publishes the tape's look and track list. Jamendo and Explore tracks are kept; the owner's own
-     * uploads appear only when marked public AND already published as songs. Private audio is dropped.
+     * Publishes the whole tape: its look and every track. Jamendo and Explore tracks are kept as they
+     * are. The owner's own uploads/recordings, public or private, become Explore tracks backed by an
+     * unlisted song row, so anyone viewing the tape can play them without them appearing in song lists.
+     * Without private audio storage those tracks can't stream, so they are left off.
      */
     async publishTape(owner: string, pathId: string, body: unknown): Promise<PublishTapeResponse> {
       const { cassette } = valid(validatePublishTapeRequest(body));
       if (cassette.id !== cassetteId(pathId)) throw new HttpError(400, 'Path ID must match the cassette ID.');
       return storage(async () => {
         const profile = await publishedProfile(owner);
+        const id = publicTapeId(owner, cassette.id);
+        const before = await repository.getTape(id);
+        const now = clock();
         const tracks: PublicTapeTrack[] = [];
         for (const track of cassette.tracks) {
           if (track.provider !== 's3') { tracks.push(track); continue; }
-          if (track.visibility !== 'public') continue;
-          const song = await repository.getSong(publicSongId(owner, track.audio.objectKey));
-          if (!song || song.ownerId !== owner) continue;
+          if (!options.authorizeAudio) continue;
+          await options.authorizeAudio(owner, track.audio);
+          const song = await repository.putSong({
+            id: publicSongId(owner, track.audio.objectKey), ownerId: owner, uploaderUsername: profile.username,
+            title: track.title, artist: track.artist, durationSec: track.durationSec, audio: track.audio,
+            ...(track.artworkUrl ? { artworkUrl: track.artworkUrl } : {}), listed: false,
+          }, now);
           const { audio: _audio, provider: _provider, source: _source, visibility: _visibility, sourceId: _sourceId, ...details } = track;
           tracks.push({ ...details, source: 'community', provider: 'explore', sourceId: song.id, hasAudio: true });
         }
         const { visibility: _visibility, tracks: _tracks, ...look } = cassette;
-        const tape = await repository.putTape({ id: publicTapeId(owner, cassette.id), owner: { userId: owner, username: profile.username }, tape: { ...look, tracks } }, clock());
+        const tape = await repository.putTape({ id, owner: { userId: owner, username: profile.username }, tape: { ...look, tracks } }, now);
+        // Songs this tape no longer uses may now be orphaned.
+        await dropUnusedSongs(owner, before ? songIdsOf(before) : []);
         changed();
         return { tape };
       });
@@ -113,7 +144,9 @@ export function createPublishService(repository: PublicCatalogRepository, option
     async unpublishTape(owner: string, pathId: string): Promise<UnpublishResponse> {
       const id = publicTapeId(owner, cassetteId(pathId));
       return storage(async () => {
-        if (!await repository.deleteTape(id, owner)) throw new HttpError(404, 'That tape is not on Explore.');
+        const before = await repository.getTape(id);
+        if (!before || before.owner.userId !== owner || !await repository.deleteTape(id, owner)) throw new HttpError(404, 'That tape is not on Explore.');
+        await dropUnusedSongs(owner, songIdsOf(before));
         changed();
         return { id };
       });

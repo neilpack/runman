@@ -9,6 +9,7 @@ import { LibraryPage } from './pages/LibraryPage';
 import { EditCassettePage } from './pages/EditCassettePage';
 import { ExplorePage } from './pages/ExplorePage';
 import { ListenerPage } from './pages/ListenerPage';
+import { PublicTapePage } from './pages/PublicTapePage';
 import { AboutPage } from './pages/AboutPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
@@ -36,6 +37,7 @@ export const router = createBrowserRouter([
       { path: '/dashboard', element: <Navigate to="/account" replace /> },
       { path: '/explore', element: <ExplorePage /> },
       { path: '/explore/u/:username', element: <ListenerPage /> },
+      { path: '/explore/tapes/:id', element: <PublicTapePage /> },
       { path: '/about', element: <AboutPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],

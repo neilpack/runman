@@ -273,8 +273,8 @@ export function TrackList({ cassette, side, onSideChange, onChange }: TrackListP
 }
 
 const VISIBILITY_CHOICES: { id: Visibility; label: string; hint: string }[] = [
-  { id: 'private', label: 'Private', hint: 'Only you can play it' },
-  { id: 'public', label: 'Public', hint: 'Anyone can find it and add it to a tape' },
+  { id: 'private', label: 'Private', hint: 'Not listed on Explore (still plays on a public tape)' },
+  { id: 'public', label: 'Public', hint: 'Listed under Explore → Songs; anyone can add it to a tape' },
 ];
 
 /** Little pop-up menu beside an uploaded song's ⋮⋮ button: choose private or public. */
