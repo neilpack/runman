@@ -1,13 +1,16 @@
 import { NavLink, Outlet } from 'react-router';
+import { Avatar } from '@/components/profile/Avatar';
+import { useAccount } from '@/hooks/useAccount';
 
 const NAV_LINKS = [
   { to: '/library', label: 'Library' },
-  { to: '/dashboard', label: 'Dashboard' },
-  { to: '/about', label: 'About' },
-  { to: '/status', label: 'Status' },
+  { to: '/explore', label: 'Explore' },
+  { to: '/account', label: 'Account' },
 ];
 
 export function Layout() {
+  const { profile } = useAccount();
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -21,6 +24,9 @@ export function Layout() {
               to={link.to}
               className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}
             >
+              {link.to === '/account' && profile && (
+                <Avatar src={profile.avatar} name={profile.username} size={22} className="nav-avatar" />
+              )}
               {link.label}
             </NavLink>
           ))}
@@ -29,7 +35,6 @@ export function Layout() {
       <main className="app-main">
         <Outlet />
       </main>
-      <footer className="app-footer">Built at the hackathon</footer>
     </div>
   );
 }

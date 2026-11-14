@@ -72,10 +72,12 @@ export interface Track {
   artist: string;
   durationSec: number;
   side: TapeSide;
-  /** Where the audio comes from: the song library, or a user recording. */
-  source: 'library' | 'recording';
+  /** Where the audio comes from: Jamendo, a user upload, or a recording. */
+  source: 'library' | 'upload' | 'recording';
   /** Playable URL once the song library / recordings exist. */
   audioUrl?: string;
+  /** Durable reference for user audio; playback URLs are generated separately. */
+  audioReference?: StoredAudioReference;
   artworkUrl?: string;
   licenseUrl?: string;
 }
