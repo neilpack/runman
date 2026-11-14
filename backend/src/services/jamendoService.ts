@@ -11,6 +11,8 @@ interface JamendoTrack {
   audio?: string;
   audiodownload?: string;
   license_ccurl?: string;
+  lyrics?: unknown;
+  musicinfo?: unknown;
 }
 
 interface JamendoResponse {
@@ -23,6 +25,76 @@ interface JamendoResponse {
 }
 
 export class JamendoError extends Error {}
+
+// Conservative text filter for titles, artist/album names, lyrics, and Jamendo metadata.
+// This is a safety filter for the demo, not a promise that it can understand every lyric.
+const UNSAFE_TERMS = [
+  'blowjob',
+  'bullshit',
+  'cocksucker',
+  'faggot',
+  'fucking',
+  'hentai',
+  'motherfucker',
+  'nigga',
+  'nigger',
+  'porn',
+  'pussy',
+  'rape',
+  'shit',
+  'slut',
+  'whore',
+  'asshole',
+  'bitch',
+  'cock',
+  'cunt',
+  'dick',
+  'fag',
+  'fuck',
+  'molest',
+  'sex',
+];
+
+const UNSAFE_TERM_PATTERN = new RegExp(
+  `(?:^|[^a-z])(?:${UNSAFE_TERMS.map((term) => term.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')).join('|')})(?:$|[^a-z])`,
+);
+
+function normalizeText(value: string): string {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[0134578]/g, (character) => ({ '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '8': 'b' })[character] ?? character)
+    .replace(/[^a-z]+/g, ' ')
+    .trim();
+}
+
+function containsUnsafeLanguage(value: string): boolean {
+  return UNSAFE_TERM_PATTERN.test(normalizeText(value));
+}
+
+function serializeMetadata(value: unknown): string {
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+export function isFamilyFriendlyTrack(track: JamendoTrack): boolean {
+  const searchableText = [
+    track.name,
+    track.artist_name,
+    track.album_name,
+    serializeMetadata(track.lyrics),
+    serializeMetadata(track.musicinfo),
+  ]
+    .filter((value): value is string => typeof value === 'string')
+    .join(' ');
+
+  return !containsUnsafeLanguage(searchableText);
+}
 
 function toMusicTrack(track: JamendoTrack): MusicTrack | undefined {
   if (
@@ -56,15 +128,18 @@ export async function searchJamendoTracks(
     throw new JamendoError('JAMENDO_CLIENT_ID is not configured');
   }
 
+  // Fetch extra candidates so filtering does not usually leave the picker nearly empty.
+  const fetchLimit = Math.min(50, Math.max(limit, limit * 2));
   const url = new URL(`${config.jamendo.apiUrl}/tracks/`);
   url.searchParams.set('client_id', config.jamendo.clientId);
   url.searchParams.set('format', 'json');
   url.searchParams.set('search', query);
-  url.searchParams.set('limit', String(limit));
+  url.searchParams.set('limit', String(fetchLimit));
   url.searchParams.set('offset', String(offset));
   url.searchParams.set('order', 'relevance');
   url.searchParams.set('audioformat', 'mp32');
   url.searchParams.set('imagesize', '300');
+  url.searchParams.set('include', 'lyrics musicinfo');
 
   let response: Response;
   try {
@@ -81,7 +156,11 @@ export async function searchJamendoTracks(
     throw new JamendoError(message);
   }
 
-  const tracks = (body.results ?? []).map(toMusicTrack).filter((track): track is MusicTrack => Boolean(track));
+  const tracks = (body.results ?? [])
+    .filter(isFamilyFriendlyTrack)
+    .map(toMusicTrack)
+    .filter((track): track is MusicTrack => Boolean(track))
+    .slice(0, limit);
   return {
     tracks,
     total: body.headers?.results_count ?? tracks.length,
