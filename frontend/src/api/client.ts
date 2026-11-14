@@ -27,10 +27,10 @@ export const api = {
   createItem: (input: CreateItemRequest) =>
     request<Item>('/api/items', { method: 'POST', body: JSON.stringify(input) }),
   deleteItem: (id: string) => request<void>(`/api/items/${id}`, { method: 'DELETE' }),
-  searchMusic: (query: string, options?: { limit?: number; offset?: number }) => {
+  searchMusic: (query: string, options?: { limit?: number; offset?: number }, signal?: AbortSignal) => {
     const params = new URLSearchParams({ q: query });
     if (options?.limit !== undefined) params.set('limit', String(options.limit));
     if (options?.offset !== undefined) params.set('offset', String(options.offset));
-    return request<MusicSearchResponse>(`/api/music/search?${params.toString()}`);
+    return request<MusicSearchResponse>(`/api/music/search?${params.toString()}`, { signal });
   },
 };
