@@ -1,5 +1,6 @@
 // Adapter between the editor's song picker and the backend music API.
 
+import type { MusicTrack } from '@runman/shared';
 import { api } from './client';
 
 export interface SongResult {
@@ -39,22 +40,27 @@ function shuffle<T>(items: T[]): T[] {
   return shuffled;
 }
 
+function toSongResult(track: MusicTrack): SongResult {
+  return {
+    id: track.id,
+    title: track.name,
+    artist: track.artistName,
+    durationSec: track.duration,
+    licenseUrl: track.licenseUrl,
+    audioUrl: track.audioUrl,
+    artworkUrl: track.imageUrl,
+  };
+}
+
 export const songLibrary: SongLibrary = {
   available: true,
   async search(query, signal) {
     const response = await api.searchMusic(query, { limit: 20 }, signal);
-    return response.tracks.map((track) => ({
-      id: track.id,
-      title: track.name,
-      artist: track.artistName,
-      durationSec: track.duration,
-      licenseUrl: track.licenseUrl,
-      audioUrl: track.audioUrl,
-      artworkUrl: track.imageUrl,
-    }));
+    return response.tracks.map(toSongResult);
   },
   async recommend(signal) {
     const query = recommendationQueries[Math.floor(Math.random() * recommendationQueries.length)];
-    return shuffle(await this.search(query, signal)).slice(0, 8);
+    const response = await api.searchMusic(query, { limit: 20 }, signal);
+    return shuffle(response.tracks.map(toSongResult)).slice(0, 8);
   },
 };
