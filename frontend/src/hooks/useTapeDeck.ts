@@ -16,12 +16,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Cassette, TapeSide, Track } from '@runman/shared';
 import { nextLatched, type DeckControl } from '@/components/cassette/CassettePlayer';
 import { playSfx, startWinding } from '@/audio/sfx';
+import { createPlaybackController } from '@/audio/playbackController';
+import { subscribeMediaAccount } from '@/auth/mediaContext';
 
 /** How many times faster than real time FF / REW move through the tape. */
 const WIND_SPEED = 16;
 const WIND_TICK_MS = 100;
-/** Re-sign an upload's playback URL when it has less than this left. */
-const URL_REFRESH_MS = 15_000;
 const NOTICE_MS = 2200;
 
 export interface TapeDeck {
@@ -44,11 +44,10 @@ export interface TapeDeck {
 
 const playable = (t: Track) => Boolean(t.audioUrl || t.audioReference);
 
-async function resolveUrl(cassetteId: string, track: Track): Promise<{ url: string; expiresAt?: number }> {
+async function resolveUrl(cassetteId: string, track: Track, signal: AbortSignal): Promise<{ url: string; expiresAt?: number }> {
   if (track.audioReference) {
-    // Loaded lazily so tapes with only library songs never pull in the storage SDK.
-    const { audioStorage } = await import('@/audio/amplifyAudioStorage');
-    const { url, expiresAt } = await audioStorage.playback(cassetteId, track.audioReference);
+    const { audioStorage } = await import('@/audio/apiAudioStorage');
+    const { url, expiresAt } = await audioStorage.playback(cassetteId, track.audioReference, signal);
     return { url: url.toString(), expiresAt: expiresAt.getTime() };
   }
   if (track.audioUrl) return { url: track.audioUrl };
@@ -81,6 +80,8 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
   const loadedRef = useRef<{ trackId: string; expiresAt?: number } | null>(null);
   /** Bumped on every transport change so a slow URL lookup can't start stale playback. */
   const opRef = useRef(0);
+  const playback = useRef(createPlaybackController(resolveUrl));
+  const errorRetry = useRef(false);
   const windTimer = useRef<number | undefined>(undefined);
   const stopWindSound = useRef<(() => void) | undefined>(undefined);
   const noticeTimer = useRef<number | undefined>(undefined);
@@ -137,6 +138,7 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
 
   const silence = () => {
     opRef.current += 1;
+    playback.current.cancelPending();
     setLoading(false);
     const a = audioRef.current;
     // Only a song that was actually playing has moved the tape; while winding, posRef leads.
@@ -154,7 +156,7 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
     if (text) flash(text);
   };
 
-  const startPlaying = async () => {
+  const startPlaying = async (force = false) => {
     const op = ++opRef.current;
     const i = indexRef.current;
     const track = tracksRef.current[i];
@@ -162,12 +164,15 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
     if (!track || !cassetteId) return;
     const a = audio();
     const loaded = loadedRef.current;
-    const stale = !isLoaded(i) || (loaded?.expiresAt !== undefined && loaded.expiresAt - Date.now() < URL_REFRESH_MS);
+    const stale = force || !isLoaded(i) || !playback.current.isCurrent(cassetteId, track) ||
+      (loaded?.expiresAt !== undefined && loaded.expiresAt - Date.now() <= 15_000);
+    if (!force) errorRetry.current = false;
     try {
+      if (stale) setLoading(true);
+      const resolved = await playback.current.resolve(cassetteId, track, { force });
+      if (!resolved || op !== opRef.current) return;
       if (stale) {
-        setLoading(true);
-        const { url, expiresAt } = await resolveUrl(cassetteId, track);
-        if (op !== opRef.current) return;
+        const { url, expiresAt } = resolved;
         a.src = url;
         loadedRef.current = { trackId: track.id, expiresAt };
         setLoadedDuration(track.durationSec);
@@ -177,7 +182,6 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
       if (op === opRef.current) setLoading(false);
     } catch (err) {
       if (op !== opRef.current || (err instanceof DOMException && err.name === 'AbortError')) return;
-      console.warn('Playback failed:', err);
       if (stale) loadedRef.current = null;
       halt(`CAN'T PLAY ${track.title}`);
     }
@@ -261,15 +265,21 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
 
   const seek = (seconds: number) => {
     const p = Math.max(0, Math.min(seconds, durationOf(indexRef.current)));
+    const resume = latchedRef.current.includes('play') && !latchedRef.current.includes('pause');
+    if (resume) silence();
     setPosition(p);
+    if (resume) { void startPlaying(); return; }
     const a = audioRef.current;
-    if (a && isLoaded(indexRef.current)) a.currentTime = p;
+    const expiry = loadedRef.current?.expiresAt;
+    if (a && isLoaded(indexRef.current) && (expiry === undefined || expiry - Date.now() > 15_000)) a.currentTime = p;
   };
 
   // A new tape or a flipped side starts over at the first song with every key up.
   useEffect(() => {
     stopWinding();
     opRef.current += 1;
+    playback.current.invalidate();
+    errorRetry.current = false;
     const a = audioRef.current;
     if (a) {
       a.pause();
@@ -284,6 +294,18 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
     setNotice(undefined);
   }, [cassette?.id, side]);
 
+  // Auth callbacks run synchronously, before React switches the visible account.
+  useEffect(() => subscribeMediaAccount(() => {
+    stopWinding();
+    opRef.current += 1;
+    playback.current.invalidate();
+    const a = audioRef.current;
+    a?.pause(); a?.removeAttribute('src'); a?.load();
+    loadedRef.current = null;
+    setLatched([]); setPosition(0); setIndex(0);
+    setLoading(false); setAudioRunning(false); setNotice(undefined);
+  }), []);
+
   // If songs are removed while the tape is in, don't point past the end of the side.
   useEffect(() => {
     if (indexRef.current >= tracks.length && tracks.length > 0) {
@@ -293,6 +315,22 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tracks.length]);
+
+  useEffect(() => {
+    const loaded = loadedRef.current;
+    const current = tracksRef.current[indexRef.current];
+    const cassetteId = cassetteIdRef.current;
+    if (!loaded || !cassetteId) return;
+    const removed = !tracks.some((track) => track.id === loaded.trackId);
+    const replaced = current?.id === loaded.trackId && !playback.current.isCurrent(cassetteId, current);
+    if (removed || replaced) {
+      halt();
+      playback.current.invalidate();
+      audioRef.current?.removeAttribute('src');
+      audioRef.current?.load();
+      loadedRef.current = null;
+    }
+  }, [tracks]);
 
   // Audio element events: smooth progress while playing, and songs running into each other.
   useEffect(() => {
@@ -325,15 +363,28 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
         setPosition(0);
       }
     };
+    const onError = () => {
+      const track = tracksRef.current[indexRef.current];
+      if (!track || !latchedRef.current.includes('play') || latchedRef.current.includes('pause')) return;
+      // One renewal per play/seek attempt; decoding or permission failures must
+      // stop instead of repeatedly requesting new bearer URLs.
+      if (track.audioReference && !errorRetry.current) {
+        errorRetry.current = true;
+        if (Number.isFinite(a.currentTime) && a.currentTime > 0) setPosition(a.currentTime);
+        void startPlaying(true);
+      } else halt(`CAN'T PLAY ${track.title}`);
+    };
     a.addEventListener('play', onPlay);
     a.addEventListener('pause', onPause);
     a.addEventListener('loadedmetadata', onMeta);
     a.addEventListener('ended', onEnded);
+    a.addEventListener('error', onError);
     return () => {
       a.removeEventListener('play', onPlay);
       a.removeEventListener('pause', onPause);
       a.removeEventListener('loadedmetadata', onMeta);
       a.removeEventListener('ended', onEnded);
+      a.removeEventListener('error', onError);
       cancelAnimationFrame(frame.current ?? 0);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -345,6 +396,7 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
       stopWinding();
       window.clearTimeout(noticeTimer.current);
       opRef.current += 1;
+      playback.current.invalidate();
       audioRef.current?.pause();
       audioRef.current?.removeAttribute('src');
     },

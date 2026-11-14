@@ -3,6 +3,8 @@
 export * from './cassettePersistence.js';
 export * from './cassetteValidation.js';
 export * from './cassetteAdapters.js';
+export * from './mediaPersistence.js';
+export * from './mediaValidation.js';
 
 /** Persist only after upload succeeds. Playback URLs are temporary browser state. */
 export interface StoredAudioReference {

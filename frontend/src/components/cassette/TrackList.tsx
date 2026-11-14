@@ -94,6 +94,7 @@ export function TrackList({ cassette, side, onSideChange, onChange }: TrackListP
   };
 
   const addUpload = (reference: StoredAudioReference, metadata: UploadedAudioMetadata) => {
+    if (cassette.tracks.some((track) => track.audioReference?.objectKey === reference.objectKey)) return;
     // AudioInput already blocks clips that don't fit; this is the last line of defence.
     if (!fits(metadata.durationSec)) {
       throw new Error(`Side ${side} only has ${formatTime(remaining)} left on the tape.`);

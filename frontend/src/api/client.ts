@@ -2,6 +2,8 @@
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { sessionStore } from '@/auth/session';
 import { createCassetteApi } from './cassetteClient';
+import { createMediaApi } from './mediaClient';
+import { getMediaAccount } from '@/auth/mediaContext';
 
 import type {
   CreateItemRequest,
@@ -49,6 +51,15 @@ function query(params: Record<string, string | number | undefined>): string {
 }
 
 export const api = {
+  media: createMediaApi({
+    baseUrl: BASE_URL,
+    currentAccount: getMediaAccount,
+    async accessToken() {
+      const access = (await fetchAuthSession()).tokens?.accessToken;
+      return access && typeof access.payload.sub === 'string' && typeof access.payload.exp === 'number'
+        ? { sub: access.payload.sub, token: access.toString(), expiresAt: access.payload.exp } : null;
+    },
+  }),
   cassettes: createCassetteApi({
     baseUrl: BASE_URL,
     currentOwner() {

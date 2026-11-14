@@ -36,7 +36,7 @@ function harness(overrides: Partial<CassetteApi> = {}, disk = new Map<string, st
   return { store, disk, api, quota: (value: boolean) => { quota = value; } };
 }
 
-test('merged upload UI tracks and references remain local when private-audio API saving is refused', async () => {
+test('legacy audio references remain local when private-audio API saving is refused', async () => {
   const { store } = harness({ save: async (_owner, input) => {
     assert.equal(input.cassette.tracks[0]!.source, 'upload');
     assert.equal(Object.hasOwn(input.cassette.tracks[0]!, 'audioReference'), false);
@@ -53,6 +53,31 @@ test('merged upload UI tracks and references remain local when private-audio API
   assert.match(store.getSync().tapes[local.id].error!, /Private audio/);
   store.setSession('guest'); store.setSession('authenticated', 'alice'); await tick();
   assert.deepEqual(store.get(local.id)?.tracks, [upload]);
+});
+
+test('finalized private audio survives failed saving, successful retry, reload and same-owner copying', async () => {
+  let attempts = 0;
+  const { store } = harness({ save: async (_owner, request) => {
+    attempts++;
+    assert.equal(request.cassette.tracks[0]?.source, 'upload');
+    if (attempts === 1) throw new CassetteApiError(503, 'Please retry.');
+    return { cassette: { schemaVersion: 1, revision: request.expectedRevision + 1, createdAt: time, updatedAt: time, payload: request.cassette } };
+  } });
+  store.setSession('authenticated', 'alice'); await tick();
+  const local = store.create();
+  const reference = { source: 'upload' as const, objectKey: 'private/alice/media/11111111-1111-4111-8111-111111111111', contentType: 'audio/webm;codecs=opus', sizeBytes: 500 };
+  store.update(local.id, { tracks: [{ id: 'clip', source: 'upload', title: 'My clip', artist: 'Me', durationSec: 10, side: 'A', audioReference: reference }] });
+  assert.equal(await store.save(local.id), false);
+  assert.deepEqual(store.get(local.id)?.tracks[0]?.audioReference, reference);
+  assert.equal(await store.save(local.id), true);
+  store.setSession('hidden'); store.setSession('authenticated', 'alice'); await tick();
+  assert.deepEqual(store.get(local.id)?.tracks[0]?.audioReference, reference);
+  const copy = store.copy(local.id);
+  assert.ok(copy);
+  assert.notEqual(copy.id, local.id);
+  assert.deepEqual(copy.tracks[0]?.audioReference, reference);
+  assert.equal(store.getSync().tapes[copy.id]?.revision, 0);
+  assert.equal(JSON.stringify(copy).includes('expiresAt'), false);
 });
 
 test('Explore community tracks survive draft updates and fail cloud save explicitly without dropping tracks', async () => {

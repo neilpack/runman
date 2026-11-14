@@ -69,7 +69,7 @@ export async function smokeArchive(archive) {
     // or any application environment. The smoke child additionally denies network.
     const env = {};
     for (const key of ['PATH', 'Path', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP', 'TMPDIR']) if (process.env[key] !== undefined) env[key] = process.env[key];
-    Object.assign(env, { NODE_ENV: 'development', ENABLE_LEGACY_EXAMPLES: 'true', AWS_REGION: 'us-west-2', CASSETTE_STORAGE_MODE: 'dynamodb', CASSETTES_TABLE: 'offline-test-cassettes', COGNITO_USER_POOL_ID: 'us-west-2_Offline123', COGNITO_USER_POOL_CLIENT_ID: 'offlinetestclient123', CASSETTE_CURSOR_SECRET: 'OFFLINE-TEST-ONLY-NOT-A-REAL-SECRET-00000000', AWS_EC2_METADATA_DISABLED: 'true' });
+    Object.assign(env, { NODE_ENV: 'development', ENABLE_LEGACY_EXAMPLES: 'true', AWS_REGION: 'us-west-2', CASSETTE_STORAGE_MODE: 'dynamodb', CASSETTES_TABLE: 'offline-test-cassettes', COGNITO_USER_POOL_ID: 'us-west-2_Offline123', COGNITO_USER_POOL_CLIENT_ID: 'offlinetestclient123', CASSETTE_CURSOR_SECRET: 'OFFLINE-TEST-ONLY-NOT-A-REAL-SECRET-00000000', MEDIA_STORAGE_MODE: 's3', PRIVATE_AUDIO_BUCKET: 'offline-test-private-audio', AWS_EC2_METADATA_DISABLED: 'true' });
     const result = await execute(process.execPath, [fileURLToPath(new URL('./smoke-backend.mjs', import.meta.url)), pathToFileURL(join(directory, entryName)).href], { cwd: directory, env, timeout: 30_000, maxBuffer: 1024 * 1024 });
     return result.stdout.trim();
   } finally {

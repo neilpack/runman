@@ -8,6 +8,8 @@
     "frontend"
   ],
   "scripts": {
+    "test:media": "tsc -p shared/tsconfig.test.json && tsx --tsconfig shared/tsconfig.test.json --test shared/tests/media.test.ts",
+    "test:media-api": "tsc -p backend/tsconfig.test.json && tsx --tsconfig backend/tsconfig.test.json --test backend/tests/mediaService.test.ts backend/tests/mediaRepository.test.ts backend/tests/mediaHttp.test.ts backend/tests/privateMediaStorage.test.ts",
     "package:backend": "npm run build -w backend && node scripts/package-backend.mjs",
     "test:deployment": "node --test scripts/tests/package-backend.test.mjs",
     "dev": "concurrently -n api,web -c blue,magenta \"npm run dev -w backend\" \"npm run dev -w frontend\"",
@@ -17,7 +19,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present && npm run typecheck:amplify",
     "typecheck:amplify": "tsc -p amplify/tsconfig.json",
     "test:auth": "tsc -p frontend/tsconfig.test.json && tsx --tsconfig frontend/tsconfig.test.json --test frontend/tests/auth.test.tsx frontend/tests/authFlows.test.ts",
-    "test:audio": "tsc -p frontend/tsconfig.test.json && tsx --tsconfig frontend/tsconfig.test.json --test frontend/tests/audioStorage.test.ts frontend/tests/recordAudio.test.ts",
+    "test:audio": "tsc -p frontend/tsconfig.test.json && tsx --tsconfig frontend/tsconfig.test.json --test frontend/tests/audioStorage.test.ts frontend/tests/mediaClient.test.ts frontend/tests/playbackController.test.ts frontend/tests/recordAudio.test.ts",
     "test:account": "tsc -p frontend/tsconfig.test.json && tsx --tsconfig frontend/tsconfig.test.json --test frontend/tests/account.test.ts",
     "test:legacy-api": "tsc -p backend/tsconfig.test.json && tsx --tsconfig backend/tsconfig.test.json --test backend/tests/legacyExamples.test.ts",
     "test:cassettes": "tsc -p shared/tsconfig.test.json && tsx --tsconfig shared/tsconfig.test.json --test shared/tests/cassettes.test.ts",
