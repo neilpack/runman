@@ -8,17 +8,19 @@
 //   drop on deck / edit pad / drawer  load / edit / put away
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { TapeSide } from '@runman/shared';
+import type { StoredAudioReference, TapeSide } from '@runman/shared';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { Cassette3D, CASSETTE_ASPECT } from '@/components/cassette/Cassette3D';
 import { CassetteDrawer } from '@/components/cassette/CassetteDrawer';
 import { CassettePlayer, type DeckControl } from '@/components/cassette/CassettePlayer';
-import { cassetteStore, useCassettes, useCassetteSync } from '@/hooks/useCassettes';
+import { cassetteStore, newId, useCassettes, useCassetteSync } from '@/hooks/useCassettes';
 import { CassetteCloudPanel } from '@/components/cassette/CassetteCloudPanel';
 import { useSession } from '@/hooks/useSession';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useTapeDeck } from '@/hooks/useTapeDeck';
 import { playSfx } from '@/audio/sfx';
+import { AudioInput, type UploadedAudioMetadata } from '@/components/AudioInput';
+import { SIDE_CAPACITY_SEC } from '@/components/cassette/constants';
 import { PlaybackDiagnostics } from '@/components/PlaybackDiagnostics';
 import './library.css';
 
@@ -107,6 +109,7 @@ function LibraryStudio() {
   const [zone, setZone] = useState<Zone>(null);
   const [animateRot, setAnimateRot] = useState(false);
   const [landKey, setLandKey] = useState(0);
+  const [recordingOpen, setRecordingOpen] = useState(false);
 
   const stageRef = useRef<HTMLDivElement>(null);
   const pedestalRef = useRef<HTMLDivElement>(null);
@@ -358,8 +361,33 @@ function LibraryStudio() {
       if (!activeId) placeOnStage(id);
       return;
     }
+    if (control === 'record') {
+      deck.press('stop');
+      setRecordingOpen(true);
+      return;
+    }
     deck.press(control);
     if (control === 'flip') setSide((s) => (s === 'A' ? 'B' : 'A'));
+  };
+
+  const addRecordedTrack = (reference: StoredAudioReference, metadata: UploadedAudioMetadata) => {
+    if (!loaded) throw new Error('Load a cassette before recording audio.');
+    const used = loaded.tracks.filter((track) => track.side === side)
+      .reduce((total, track) => total + track.durationSec, 0);
+    const remaining = Math.max(0, SIDE_CAPACITY_SEC - used);
+    if (metadata.durationSec > remaining) throw new Error(`Side ${side} only has ${Math.floor(remaining / 60)}:${String(Math.floor(remaining % 60)).padStart(2, '0')} left on the tape.`);
+    cassetteStore.update(loaded.id, (cassette) => ({
+      tracks: [...cassette.tracks, {
+        id: newId(),
+        title: metadata.name.replace(/\.[^/.]+$/, '') || 'Microphone recording',
+        artist: 'Your recording',
+        durationSec: metadata.durationSec,
+        audioReference: reference,
+        side,
+        source: 'recording',
+      }],
+    }));
+    setRecordingOpen(false);
   };
 
   const create = () => {
@@ -411,6 +439,27 @@ function LibraryStudio() {
               canSkipNext: deck.trackNumber < deck.trackCount,
             }}
           />
+          {recordingOpen && loaded && (
+            <div className="record-dialog-backdrop" role="presentation" onClick={() => setRecordingOpen(false)}>
+              <section className="record-dialog" role="dialog" aria-modal="true" aria-labelledby="record-dialog-title" onClick={(event) => event.stopPropagation()}>
+                <header className="record-dialog-head">
+                  <div>
+                    <p className="eyebrow">Side {side} · {loaded.name}</p>
+                    <h2 id="record-dialog-title">Record a track</h2>
+                  </div>
+                  <button type="button" className="record-dialog-close" onClick={() => setRecordingOpen(false)} aria-label="Close recorder">×</button>
+                </header>
+                <p className="record-dialog-copy">Record from your microphone, preview the clip, then upload it to add it to this cassette.</p>
+                <AudioInput
+                  cassetteId={loaded.id}
+                  maxDurationSec={Math.max(0, SIDE_CAPACITY_SEC - loaded.tracks.filter((track) => track.side === side).reduce((total, track) => total + track.durationSec, 0))}
+                  limitLabel={`Side ${side}`}
+                  onUploaded={addRecordedTrack}
+                />
+                <p className="record-dialog-note">Cloud storage is required to save a recording to your cassette.</p>
+              </section>
+            </div>
+          )}
           <div ref={pedestalRef} className={`pedestal${active ? ' occupied' : ''}`}>
             <span className="pedestal-ring" />
           </div>
