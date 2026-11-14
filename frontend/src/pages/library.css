@@ -259,3 +259,43 @@
   position: relative;
   z-index: 1;
 }
+
+.cassette-saved-toast {
+  position: fixed;
+  top: 84px;
+  left: 50%;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 20px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  border: 1px solid color-mix(in srgb, var(--studio-accent) 28%, var(--studio-panel-2));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--studio-accent) 8%, var(--studio-panel));
+  color: var(--studio-text);
+  font-size: 0.85rem;
+  font-weight: 500;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--studio-bg) 65%, transparent);
+  pointer-events: none;
+  animation: cassette-saved-popup 3.2s ease both;
+}
+.cassette-saved-toast svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: var(--studio-accent);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+@keyframes cassette-saved-popup {
+  0% { opacity: 0; transform: translate(-50%, -12px) scale(0.96); }
+  10%, 85% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -8px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cassette-saved-toast { animation: none; transform: translateX(-50%); }
+}

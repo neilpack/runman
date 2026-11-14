@@ -14,10 +14,6 @@
   flex-wrap: wrap;
 }
 
-.editor-saved {
-  font-size: 0.8rem;
-}
-
 /* Three panes on wide screens: customization | tape on the cutting mat | tracklist notepad */
 .editor-grid {
   max-width: 1640px;
