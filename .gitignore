@@ -25,3 +25,6 @@ Thumbs.db
 
 # Claude Code personal settings (shared settings in .claude/settings.json are committed)
 .claude/settings.local.json
+
+# Notes and specific Prompts that should be ignored
+ignored/
