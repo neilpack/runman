@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { S3Client } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
 import { mediaObjectKey, type CreateMediaUploadRequest } from '@runman/shared';
 import { createMediaApi, type MediaAccount } from '../src/api/mediaClient';
@@ -70,8 +71,40 @@ test('invalid tokens and malformed complete selectors never reach network; serve
 
 test('completion rejects injected/private foreign reference fields and playback requires exact version-pinned S3 location', async () => {
   for (const value of [{ ...reference(), objectKey: mediaObjectKey('owner-b', id) }, { ...reference(), url: 'https://example.com' }, { ...reference(), sizeBytes: 0 }]) await assert.rejects(setup(async () => json({ reference: value })).complete(account, id), { status: 502 });
-  const expiresAt = new Date(Date.now() + 60_000).toISOString();
-  const url = `https://s3.us-west-2.amazonaws.com/offline-private-audio/${reference().objectKey}?versionId=version-1`;
+  const issued = new Date(Math.floor(Date.now() / 1000) * 1000);
+  const expiresAt = new Date(issued.getTime() + 60_000).toISOString();
+  const stamp = issued.toISOString().replace(/[-:]/g, '').replace('.000', '');
+  const url = `https://s3.us-west-2.amazonaws.com/offline-private-audio/${reference().objectKey}?versionId=version-1&X-Amz-Date=${stamp}&X-Amz-Expires=60`;
   assert.equal((await setup(async () => json({ url, expiresAt })).playback(account, id)).url, url);
   for (const bad of [url.replace('versionId=version-1', 'versionId=null'), url.replace(account.owner, 'foreign'), 'https://attacker.example.com/private']) await assert.rejects(setup(async () => json({ url: bad, expiresAt })).playback(account, id), { status: 502 });
+});
+
+test('real signed playback grants tolerate clock skew and use a conservative browser-local cache deadline', async () => {
+  const issued = new Date(Math.floor(Date.now() / 1000) * 1000);
+  const client = new S3Client({ region: 'us-west-2', forcePathStyle: true, credentials: { accessKeyId: 'OFFLINE', secretAccessKey: 'OFFLINE_NOT_REAL' } });
+  const url = await getSignedUrl(client, new GetObjectCommand({ Bucket: 'offline-private-audio', Key: reference().objectKey, VersionId: 'version-1' }), { expiresIn: 300, signingDate: issued });
+  for (const skew of [-1500, -120_000, 600_000]) {
+    let clock = issued.getTime() + skew; const started = clock;
+    const api = createMediaApi({ baseUrl: '', currentAccount: () => account, now: () => clock,
+      accessToken: async () => ({ sub: account.owner, token: 'offline', expiresAt: clock / 1000 + 600 }),
+      fetcher: async () => { clock += 250; return json({ url, expiresAt: new Date(issued.getTime() + 300_500).toISOString() }); } });
+    const result = await api.playback(account, id);
+    assert.equal(result.url, url);
+    assert.equal(Date.parse(result.expiresAt), started + 299_000);
+  }
+});
+
+test('grant bounds use signed dates/duration; malformed, overlong or inconsistent playback grants fail closed', async () => {
+  const issued = new Date(Math.floor(Date.now() / 1000) * 1000); const stamp = issued.toISOString().replace(/[-:]/g, '').replace('.000', '');
+  const base = `https://s3.us-west-2.amazonaws.com/offline-private-audio/${reference().objectKey}?versionId=v1`;
+  for (const [date, seconds, expiry] of [[stamp, '900', 900_000], ['invalid', '300', 300_000], [stamp, '300', 600_000], [stamp, '0', 0]] as const) {
+    await assert.rejects(setup(async () => json({ url: `${base}&X-Amz-Date=${date}&X-Amz-Expires=${seconds}`, expiresAt: new Date(issued.getTime() + expiry).toISOString() })).playback(account, id), { status: 502 });
+  }
+});
+
+test('fresh signed POST policy expiry is validated against its signing date despite browser clock skew', async () => {
+  const grant = await signedGrant(); const clock = Date.now() - 600_000;
+  const api = createMediaApi({ baseUrl: '', currentAccount: () => account, now: () => clock,
+    accessToken: async () => ({ sub: account.owner, token: 'offline', expiresAt: clock / 1000 + 600 }), fetcher: async () => json(grant) });
+  assert.deepEqual(await api.createUpload(account, input), grant);
 });

@@ -696,27 +696,6 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: (cassetteSav
               </p>
             </div>
           </div>
-
-          {/* ---- Cassette settings: who can see this tape ---- */}
-          <div className="side-block settings-block">
-            <div className="side-block-head">
-              <span>Cassette settings</span>
-            </div>
-            <div className="field">
-              <span className="field-label">Visibility</span>
-              <VisibilitySwitch
-                label="Cassette visibility"
-                value={visibilityOf(cassette)}
-                onChange={(visibility) => update({ visibility })}
-              />
-              <p className="settings-note studio-muted">
-                {visibilityOf(cassette) === 'public'
-                  ? 'Anyone can view this tape and add it to their library'
-                  : 'Only you can see this tape'}{' '}
-                {/* Your uploaded songs stay private unless you make them public from the ⋮⋮ menu in the tracklist. */}
-              </p>
-            </div>
-          </div>
         </section>
 
         {/* ---------------- Preview ---------------- */}
