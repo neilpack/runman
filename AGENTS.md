@@ -35,6 +35,7 @@ Run from the repo root.
 | `npm run typecheck:amplify` | Check Amplify definitions without deploying AWS resources |
 | `npm run test:legacy-api` | Typecheck and test local-example/API exposure boundaries |
 | `npm run test:cassettes` | Typecheck and test cassette persistence contracts/adapters |
+| `npm run test:media` | Typecheck and test private media contracts, ledger and key invariants offline |
 | `npm run test:cassette-api` | Offline JWT, owner-isolation, cursor and repository API tests |
 
 ## AWS deployment boundary
