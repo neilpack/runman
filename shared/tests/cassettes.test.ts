@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Cassette, CassetteDocument, CassettePayload, CassetteValidationResult, SaveCassetteRequest, StoredAudioReference } from '../src/index.js';
-import { CASSETTE_LIMITS, cassetteFromDocument, cassetteToSaveRequest, validateCassetteDocument, validateDeleteCassetteRequest, validateListCassettesRequest, validateSaveCassetteRequest } from '../src/index.js';
 import { CASSETTE_LIMITS, cassetteFromDocument, sanitizeCustomStickers, cassetteToSaveRequest, validateCassetteDocument, validateDeleteCassetteRequest, validateListCassettesRequest, validateSaveCassetteRequest } from '../src/index.js';
 
 const timestamp = '2026-11-14T01:00:00.000Z';
@@ -211,7 +210,7 @@ test('audio references require exact safe metadata and matching source, not owne
   ]) invalid(cassetteToSaveRequest(local, 0, { B: { 'track-b': { ...reference, ...changes } } }), 'audio');
   const valid = ok(cassetteToSaveRequest(local, 0, { B: { 'track-b': reference } }));
   const stored = valid.cassette.tracks[0]!;
-  if (stored.source !== 'library') stored.audio.source = 'upload';
+  if (stored.provider === 's3') stored.audio.source = 'upload';
   invalid(validateSaveCassetteRequest(valid), 'audio.source');
 });
 
@@ -297,4 +296,41 @@ test('hand-drawn custom stickers round-trip and are bounded', () => {
   // The lenient reader (public profile snapshots) keeps good drawings and drops bad ones.
   assert.deepEqual(sanitizeCustomStickers([art, { ...art, id: 'dupe-slot' }, { id: 'x', slot: 0, strokes: [{ color: '#fff', width: 99, points: [1, 1] }] }, 'junk']), [art, { id: 'x', slot: 0, strokes: [] }]);
   assert.equal(sanitizeCustomStickers('nope'), undefined);
+});
+
+test('tape and own-audio visibility round-trip; other sources drop it and bad values are rejected', () => {
+  const upload: StoredAudioReference = { ...reference, source: 'upload' };
+  const local: Cassette = { ...tape(), visibility: 'public', tracks: [
+    { id: 'own', source: 'upload', title: 'Mine', artist: 'Me', durationSec: 5, side: 'A', audioReference: upload, visibility: 'public' },
+    { id: 'lib', source: 'library', sourceId: '123', title: 'Theirs', artist: 'Them', durationSec: 5, side: 'B', visibility: 'public' },
+  ] };
+  const saved = ok(cassetteToSaveRequest(local, 0));
+  assert.equal(saved.cassette.visibility, 'public');
+  const own = saved.cassette.tracks[0];
+  assert.equal(own.provider === 's3' && own.visibility, 'public');
+  assert.equal('visibility' in saved.cassette.tracks[1], false);
+  const restored = ok(cassetteFromDocument(document(saved.cassette))).cassette;
+  assert.equal(restored.visibility, 'public');
+  assert.equal(restored.tracks[0].visibility, 'public');
+  invalid(validateSaveCassetteRequest({ ...saved, cassette: { ...saved.cassette, visibility: 'friends' } }), 'cassette.visibility');
+  invalid(validateSaveCassetteRequest({ ...saved, cassette: { ...saved.cassette, tracks: [{ ...saved.cassette.tracks[1], visibility: 'public' }] } }), 'tracks[0].visibility');
+});
+
+test('community (Explore) tracks persist sourceId + hasAudio and rebuild their stable audio URL on restore', () => {
+  const local: Cassette = { ...tape(), tracks: [
+    { id: 'c1', source: 'community', sourceId: 'song-1', title: 'Shared', artist: 'Friend', durationSec: 30, side: 'A', audioUrl: 'http://localhost:4000/api/explore/songs/song-1/audio' },
+    { id: 'c2', source: 'community', sourceId: 'song-2', title: 'Silent', artist: 'Friend', durationSec: 30, side: 'A' },
+  ] };
+  const saved = ok(cassetteToSaveRequest(local, 0));
+  assert.deepEqual(saved.cassette.tracks.map((track) => track.source === 'community' && [track.provider, track.hasAudio]), [['explore', true], ['explore', false]]);
+  assert.equal(JSON.stringify(saved).includes('localhost'), false);
+  const url = (id: string) => `/api/explore/songs/${id}/audio`;
+  const restored = ok(cassetteFromDocument(document(saved.cassette), { communityAudioUrl: url })).cassette;
+  assert.equal(restored.tracks[0].audioUrl, '/api/explore/songs/song-1/audio');
+  assert.equal(restored.tracks[1].audioUrl, undefined);
+  assert.equal(restored.tracks[0].source, 'community');
+  const [first] = saved.cassette.tracks;
+  invalid(validateSaveCassetteRequest({ ...saved, cassette: { ...saved.cassette, tracks: [{ ...first, sourceId: '../x' }] } }), 'tracks[0].sourceId');
+  invalid(validateSaveCassetteRequest({ ...saved, cassette: { ...saved.cassette, tracks: [{ ...first, hasAudio: 'yes' }] } }), 'tracks[0].hasAudio');
+  invalid(validateSaveCassetteRequest({ ...saved, cassette: { ...saved.cassette, tracks: [{ ...first, audio: reference }] } }), 'tracks[0].audio');
 });

@@ -167,3 +167,34 @@ test('store never applies a slow change to a different account', async () => {
   assert.equal(store.getSnapshot().profile?.userId, 'user-2');
   assert.notEqual(store.getSnapshot().profile?.username, 'slowname');
 });
+
+test('favorites save to the cloud profile, migrate a device-only pick, and fall back locally only on 503', async () => {
+  const { sdk } = fakeSdk({ email: 'a@example.com' });
+  const storage = memoryStorage();
+  const remote = new Map<string, ReturnType<typeof snapshotTape> | null>();
+  let failure: (Error & { status?: number }) | null = null;
+  const cloud = {
+    async get(userId: string) { if (failure) throw failure; return remote.has(userId) ? { favoriteTape: remote.get(userId)! } : null; },
+    async save(userId: string, tape: ReturnType<typeof snapshotTape> | null) { if (failure) throw failure; remote.set(userId, tape); },
+  };
+  const service = createAccountService(sdk, storage, cloud);
+  const tape = snapshotTape(cassette);
+
+  await service.setFavorite('user-1', tape);
+  assert.deepEqual(remote.get('user-1'), tape);
+  storage.data.clear();
+  assert.equal((await service.load('user-1')).favoriteTape?.id, 'tape-1', 'another device sees the cloud favorite');
+
+  storage.data.set('runman.profile.v1.user-2.favoriteTape', JSON.stringify(tape));
+  assert.equal((await service.load('user-2')).favoriteTape?.id, 'tape-1');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(remote.get('user-2')?.id, 'tape-1', 'device-only favorite is copied to the cloud');
+
+  failure = Object.assign(new Error('not configured'), { status: 503 });
+  await service.setFavorite('user-3', tape);
+  assert.equal(remote.has('user-3'), false);
+  assert.equal((await service.load('user-3')).favoriteTape?.id, 'tape-1', 'local-only when the server has no profile storage');
+
+  failure = Object.assign(new Error('unauthorized'), { status: 401 });
+  await assert.rejects(service.setFavorite('user-3', null), /unauthorized/);
+});

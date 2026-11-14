@@ -143,7 +143,7 @@ test('listing budgets 100 distinct media keys at cassette boundaries and resumes
   assert.deepEqual(second.items.map((item) => item.payload.id), ['tape-b', 'tape-c']);
   assert.equal(calls, 120); assert.equal(second.nextCursor, undefined);
   const altered = privateTape('tape-d', 'b', 1); const track = altered.cassette.tracks[0];
-  assert.ok(track.source !== 'library'); track.audio.sizeBytes = 13;
+  assert.ok(track.provider === 's3'); track.audio.sizeBytes = 13;
   await repository.save(owner, altered, start);
   calls = 0;
   await assert.rejects(service.list(owner, { cursor: first.nextCursor }), { status: 422 });

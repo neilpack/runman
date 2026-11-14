@@ -32,6 +32,7 @@ interface DraftAudio {
   data: Blob;
   name: string;
   source: StoredAudioReference['source'];
+  durationSec?: number;
 }
 
 function errorMessage(error: unknown): string {
@@ -39,6 +40,30 @@ function errorMessage(error: unknown): string {
   if (error instanceof DOMException && error.name === 'NotFoundError') return 'No microphone was found. Connect one or choose an audio file.';
   if (error instanceof DOMException && error.name === 'AbortError') return 'Cancelled. You can try again.';
   return error instanceof Error ? error.message : 'Audio could not be processed. Please try again.';
+}
+
+function readDuration(data: Blob): Promise<number> {
+  const url = URL.createObjectURL(data);
+  const audio = document.createElement('audio');
+  audio.preload = 'metadata';
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      audio.removeAttribute('src');
+      audio.load();
+      URL.revokeObjectURL(url);
+    };
+    audio.onloadedmetadata = () => {
+      const duration = audio.duration;
+      cleanup();
+      if (Number.isFinite(duration) && duration > 0) resolve(duration);
+      else reject(new Error('The audio duration could not be determined. Try recording again.'));
+    };
+    audio.onerror = () => {
+      cleanup();
+      reject(new Error('The audio duration could not be determined. Try recording again.'));
+    };
+    audio.src = url;
+  });
 }
 
 export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel = 'This tape' }: AudioInputProps) {
@@ -102,7 +127,7 @@ export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel 
     validateAudio(value.data, (type) => document.createElement('audio').canPlayType(type) !== '');
     setDraft(value);
     setUploaded(undefined);
-    setDurationSec(0);
+    setDurationSec(value.durationSec ?? 0);
     setAdopted(false);
     setRetryCompletion(false);
     upload.current?.cancel();
@@ -137,7 +162,7 @@ export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel 
       recording.current = session;
       setStatus('recording');
       const data = await session.result;
-      if (current()) selectDraft({ data, name: 'Microphone recording', source: 'recording' });
+      if (current()) selectDraft({ data, name: 'Microphone recording', source: 'recording', durationSec: session.durationSec });
     } catch (cause) {
       if (current()) setError(errorMessage(cause));
     } finally {
@@ -157,6 +182,12 @@ export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel 
     setProgress(undefined);
     setStatus('uploading');
     try {
+      let duration = durationSec;
+      if (duration <= 0) {
+        duration = await readDuration(draft.data);
+        if (!current()) return;
+        setDurationSec(duration);
+      }
       const previous = upload.current;
       const retry = previous?.canRetryCompletion() === true;
       const task = retry ? previous : audioStorage.upload({
@@ -165,7 +196,22 @@ export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel 
       });
       upload.current = task;
       const reference = await (retry ? task.retryCompletion() : task.result);
-      if (current()) { setUploaded(reference); setRetryCompletion(false); upload.current = undefined; }
+      if (current()) {
+        setUploaded(reference);
+        setRetryCompletion(false);
+        upload.current = undefined;
+        // A completed upload is also the user's request to add the clip. Keep the
+        // explicit Add button as a fallback for browsers that have not reported
+        // audio metadata yet.
+        if (duration > 0) {
+          try {
+            onUploaded?.(reference, { name: draft.name, durationSec: duration });
+            setAdopted(true);
+          } catch (cause) {
+            setError(errorMessage(cause));
+          }
+        }
+      }
     } catch (cause) {
       if (current()) {
         setError(errorMessage(cause));

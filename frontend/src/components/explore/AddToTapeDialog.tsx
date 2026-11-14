@@ -8,6 +8,7 @@ import { CassetteFace } from '@/components/cassette/CassetteFace';
 import { faceFor } from '@/components/cassette/sides';
 import { formatTime } from '@/components/cassette/TrackList';
 import { cassetteStore, newId, useCassettes } from '@/hooks/useCassettes';
+import { api } from '@/api/client';
 import { tapeFit, trackFromPublicSong } from './addToTape';
 import './explore.css';
 
@@ -30,16 +31,21 @@ export function AddToTapeDialog({ song, onClose }: { song: PublicSong; onClose: 
     if (dialog && !dialog.open) dialog.showModal();
   }, []);
 
+  // Feeds trending. Counted once per listener on the server; guests and errors are ignored.
+  const countAdd = () => { void api.publish.recordAdd(song.id).catch(() => undefined); };
+
   const addTo = (cassetteId: string) => {
     const tape = cassetteStore.get(cassetteId);
     if (!tape || !tapeFit(tape, side, song).ok) return;
     cassetteStore.update(cassetteId, (c) => ({ tracks: [...c.tracks, trackFromPublicSong(song, side, newId())] }));
     setAdded({ cassetteId, name: tape.name || 'Untitled', side });
+    countAdd();
   };
 
   const addToNewTape = () => {
     const tape = cassetteStore.create({ name: 'New Mix', tracks: [trackFromPublicSong(song, 'A', newId())] });
     setAdded({ cassetteId: tape.id, name: tape.name, side: 'A' });
+    countAdd();
   };
 
   return (

@@ -3,6 +3,8 @@ import { fetchAuthSession } from 'aws-amplify/auth';
 import { sessionStore } from '@/auth/session';
 import { createCassetteApi } from './cassetteClient';
 import { createMediaApi } from './mediaClient';
+import { createProfileApi } from './profileClient';
+import { createPublishApi } from './publishClient';
 import { getMediaAccount } from '@/auth/mediaContext';
 
 import type {
@@ -13,6 +15,8 @@ import type {
   ListenerSearchResponse,
   MusicSearchResponse,
   PublicSongPage,
+  PublicTapePage,
+  PublicTapeResponse,
   TrendingSongsResponse,
 } from '@runman/shared';
 
@@ -72,6 +76,23 @@ export const api = {
         ? { sub: access.payload.sub, token: access.toString(), expiresAt: access.payload.exp } : null;
     },
   }),
+  profile: createProfileApi({
+    baseUrl: BASE_URL,
+    async accessToken() {
+      const access = (await fetchAuthSession()).tokens?.accessToken;
+      return access && typeof access.payload.sub === 'string' && typeof access.payload.exp === 'number'
+        ? { sub: access.payload.sub, token: access.toString(), expiresAt: access.payload.exp } : null;
+    },
+  }),
+  /** Signed-in publishing to Explore (see api/publicSync.ts). */
+  publish: createPublishApi({
+    baseUrl: BASE_URL,
+    async accessToken() {
+      const access = (await fetchAuthSession()).tokens?.accessToken;
+      return access && typeof access.payload.sub === 'string' && typeof access.payload.exp === 'number'
+        ? { sub: access.payload.sub, token: access.toString(), expiresAt: access.payload.exp } : null;
+    },
+  }),
   health: () => request<HealthResponse>('/api/health'),
   listItems: () => request<Item[]>('/api/items'),
   createItem: (input: CreateItemRequest) =>
@@ -92,6 +113,10 @@ export const api = {
     request<ListenerSearchResponse>(`/api/explore/profiles${query({ q })}`, { signal }),
   listener: (username: string, signal?: AbortSignal) =>
     request<ListenerProfileResponse>(`/api/explore/profiles/${encodeURIComponent(username)}`, { signal }),
+  exploreTapes: (params: { q?: string; limit?: number; offset?: number }, signal?: AbortSignal) =>
+    request<PublicTapePage>(`/api/explore/tapes${query(params)}`, { signal }),
+  publicTape: (id: string, signal?: AbortSignal) =>
+    request<PublicTapeResponse>(`/api/explore/tapes/${encodeURIComponent(id)}`, { signal }),
   /** Stable, storable audio URL for a public song (the server redirects to a fresh S3 link). */
   publicSongAudioUrl: (songId: string) => `${BASE_URL}/api/explore/songs/${encodeURIComponent(songId)}/audio`,
 };

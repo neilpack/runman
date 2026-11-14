@@ -19,6 +19,8 @@ export interface RecordingDependencies {
 
 export interface AudioRecording {
   result: Promise<Blob>;
+  /** Wall-clock duration captured while MediaRecorder was running. */
+  readonly durationSec: number;
   stop(): void;
   cancel(): void;
 }
@@ -78,6 +80,8 @@ export async function recordAudio(
   let bytes = 0;
   let settled = false;
   let stopping = false;
+  let startedAt = 0;
+  let durationSec = 0;
   let resolve!: (value: Blob) => void;
   let reject!: (error: Error) => void;
   const result = new Promise<Blob>((done, fail) => { resolve = done; reject = fail; });
@@ -121,11 +125,14 @@ export async function recordAudio(
     if (settled) return;
     if (!bytes) { fail(new Error('The recording is empty. Please try again.')); return; }
     const data = new Blob(chunks, { type: recorder.mimeType || type });
+    // MediaRecorder WebM blobs often have no usable duration metadata. The
+    // elapsed recorder time is reliable for tape capacity and persistence.
+    durationSec = Math.max(0.1, (Date.now() - startedAt) / 1000);
     settled = true;
     cleanup();
     resolve(data);
   };
   signal.addEventListener('abort', cancel, { once: true });
-  try { recorder.start(1000); } catch { fail(new Error('Recording could not start. Check microphone access and try again.')); }
-  return { result, stop, cancel };
+  try { startedAt = Date.now(); recorder.start(1000); } catch { fail(new Error('Recording could not start. Check microphone access and try again.')); }
+  return { result, get durationSec() { return durationSec; }, stop, cancel };
 }

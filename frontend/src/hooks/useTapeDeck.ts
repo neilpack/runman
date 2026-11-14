@@ -298,7 +298,7 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
       return; // The page changes the side / unloads the tape; the reset effect below rewinds.
     }
     if (control === 'record') {
-      halt('RECORD SONGS IN THE EDITOR');
+      halt();
       return;
     }
     if (control === 'stop') {

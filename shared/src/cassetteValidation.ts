@@ -1,8 +1,11 @@
 import type { CustomSticker, CustomStickerStroke } from './index.js';
 import type { CassetteDocument, CassetteValidationIssue, CassetteValidationResult, DeleteCassetteRequest, ListCassettesRequest, SaveCassetteRequest } from './cassettePersistence.js';
 import { CASSETTE_LIMITS as limits } from './cassettePersistence.js';
+import type { ProfileDocument, SaveProfileRequest } from './profilePersistence.js';
+import type { PublicTape, PublishProfileRequest, PublishSongRequest, PublishTapeRequest, UnpublishSongRequest } from './explorePublishing.js';
 
 const pens = ['handwritten', 'marker', 'script', 'typewriter', 'clean'];
+const visibilities = ['private', 'public'];
 const trackDetails = ['id', 'title', 'artist', 'durationSec', 'side', 'source', 'provider'];
 /** Pen width range for hand-drawn stickers, in 100 × 100 canvas units. */
 export const CUSTOM_STROKE_WIDTH = { min: 0.5, max: 40 } as const;
@@ -110,21 +113,43 @@ class Check {
       if (coords > limits.customStickerCoords) this.fail(`${at}.strokes`, `Drawing has more than ${limits.customStickerCoords} coordinates.`);
     });
   }
+  objectKey(value: unknown, path: string) {
+    if (this.text(value, path, limits.objectKey) &&
+      (!/^[a-zA-Z0-9_./:@+-]+$/.test(value) || value.includes('://') || value.split('/').some((part) => !part || part === '.' || part === '..'))) this.fail(path, 'Expected a durable object key, not a URL or traversal path.');
+  }
+  username(value: unknown, path: string) {
+    if (typeof value !== 'string' || !/^[A-Za-z0-9](?:[A-Za-z0-9_.-]{1,22})[A-Za-z0-9]$/.test(value)) this.fail(path, 'Expected a 3-24 character username of letters, numbers, dots, dashes and underscores that starts and ends with a letter or number.');
+  }
+  avatar(value: unknown, path: string) {
+    if (value === null) return;
+    if (typeof value === 'string' && value.length <= 2000 && /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(value)) return;
+    this.url(value, path);
+  }
+  /** A tape as shown on Explore: no visibility and only Jamendo/Explore tracks. */
+  publicTapePayload(value: unknown, path: string) {
+    if (value && typeof value === 'object' && Object.hasOwn(value, 'visibility')) this.fail(`${path}.visibility`, 'Public tapes do not carry visibility.');
+    this.payload(value, path);
+    const tracks = value && typeof value === 'object' && 'tracks' in value && Array.isArray(value.tracks) ? value.tracks : [];
+    tracks.forEach((track: unknown, index: number) => {
+      if (track && typeof track === 'object' && 'provider' in track && track.provider === 's3') this.fail(`${path}.tracks[${index}]`, 'Public tapes cannot reference private audio.');
+    });
+  }
   audio(value: unknown, path: string, source: unknown) {
     const audio = this.fields(value, path, ['source', 'objectKey', 'contentType', 'sizeBytes']);
     if (!audio) return;
     this.choice(audio.source, `${path}.source`, ['upload', 'recording']);
     if (audio.source !== source) this.fail(`${path}.source`, 'Audio reference source must match the track.');
-    if (this.text(audio.objectKey, `${path}.objectKey`, limits.objectKey)) {
-      const key = audio.objectKey;
-      if (!/^[a-zA-Z0-9_./:@+-]+$/.test(key) || key.includes('://') || key.split('/').some((part) => !part || part === '.' || part === '..')) this.fail(`${path}.objectKey`, 'Expected a durable object key, not a URL or traversal path.');
-    }
+    this.objectKey(audio.objectKey, `${path}.objectKey`);
     if (this.text(audio.contentType, `${path}.contentType`, 128) &&
       !/^audio\/(?:mpeg|mp3|mp4|aac|x-m4a|wav|wave|x-wav|ogg|webm|flac)(?:;\s?codecs=[a-z\d.,_-]{1,80})?$/i.test(audio.contentType)) this.fail(`${path}.contentType`, 'Unsupported audio content type.');
     this.number(audio.sizeBytes, `${path}.sizeBytes`, 1, limits.audioBytes, true);
   }
-  payload(value: unknown, path: string) {
-    const tape = this.fields(value, path, payloadFields, ['sideB', 'customStickers']);
+  timestamp(value: unknown, path: string) {
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString() !== value) this.fail(path, 'Expected a canonical ISO timestamp.');
+  }
+  /** A tape's look frozen for a profile (TapeSnapshot): no tracks or audio. */
+  snapshot(value: unknown, path: string) {
+    const tape = this.fields(value, path, ['id', 'name', 'shellColor', 'shellType', ...visuals, 'updatedAt', 'trackCount'], ['sideB', 'customStickers']);
     if (!tape) return;
     this.id(tape.id, `${path}.id`);
     this.text(tape.name, `${path}.name`, limits.name, true);
@@ -134,14 +159,32 @@ class Check {
     this.color(tape.inkColor, `${path}.inkColor`);
     this.choice(tape.penStyle, `${path}.penStyle`, pens);
     this.stickers(tape.stickers, `${path}.stickers`);
-    if (Object.hasOwn(tape, 'sideB')) {
-      const side = this.fields(tape.sideB, `${path}.sideB`, [], visuals);
-      if (side) {
-        for (const color of ['labelColor', 'inkColor']) if (Object.hasOwn(side, color)) this.color(side[color], `${path}.sideB.${color}`);
-        if (Object.hasOwn(side, 'penStyle')) this.choice(side.penStyle, `${path}.sideB.penStyle`, pens);
-        if (Object.hasOwn(side, 'stickers')) this.stickers(side.stickers, `${path}.sideB.stickers`);
-      }
-    }
+    this.sideB(tape, path);
+    if (Object.hasOwn(tape, 'customStickers')) this.customStickers(tape.customStickers, `${path}.customStickers`);
+    this.timestamp(tape.updatedAt, `${path}.updatedAt`);
+    this.number(tape.trackCount, `${path}.trackCount`, 0, limits.tracksPerCassette, true);
+  }
+  sideB(tape: Record<string, unknown>, path: string) {
+    if (!Object.hasOwn(tape, 'sideB')) return;
+    const side = this.fields(tape.sideB, `${path}.sideB`, [], visuals);
+    if (!side) return;
+    for (const color of ['labelColor', 'inkColor']) if (Object.hasOwn(side, color)) this.color(side[color], `${path}.sideB.${color}`);
+    if (Object.hasOwn(side, 'penStyle')) this.choice(side.penStyle, `${path}.sideB.penStyle`, pens);
+    if (Object.hasOwn(side, 'stickers')) this.stickers(side.stickers, `${path}.sideB.stickers`);
+  }
+  payload(value: unknown, path: string) {
+    const tape = this.fields(value, path, payloadFields, ['sideB', 'customStickers', 'visibility']);
+    if (!tape) return;
+    if (Object.hasOwn(tape, 'visibility')) this.choice(tape.visibility, `${path}.visibility`, visibilities);
+    this.id(tape.id, `${path}.id`);
+    this.text(tape.name, `${path}.name`, limits.name, true);
+    this.color(tape.shellColor, `${path}.shellColor`);
+    this.choice(tape.shellType, `${path}.shellType`, ['solid', 'clear', 'retro']);
+    this.color(tape.labelColor, `${path}.labelColor`);
+    this.color(tape.inkColor, `${path}.inkColor`);
+    this.choice(tape.penStyle, `${path}.penStyle`, pens);
+    this.stickers(tape.stickers, `${path}.stickers`);
+    this.sideB(tape, path);
     if (Object.hasOwn(tape, 'customStickers')) this.customStickers(tape.customStickers, `${path}.customStickers`);
     if (!Array.isArray(tape.tracks)) { this.fail(`${path}.tracks`, 'Expected a track array.'); return; }
     if (tape.tracks.length > limits.tracksPerCassette) this.fail(`${path}.tracks`, `At most ${limits.tracksPerCassette} tracks per cassette.`);
@@ -149,8 +192,12 @@ class Check {
     const tracks: unknown[] = tape.tracks;
     tracks.slice(0, limits.tracksPerCassette + 1).forEach((value, index) => {
       const at = `${path}.tracks[${index}]`;
-      const isLibrary = !!value && typeof value === 'object' && 'source' in value && value.source === 'library';
-      const track = this.fields(value, at, [...trackDetails, ...(isLibrary ? ['sourceId'] : ['audio'])], ['artworkUrl', 'licenseUrl', ...(isLibrary ? ['audioUrl'] : ['sourceId'])]);
+      const source = !!value && typeof value === 'object' && 'source' in value ? value.source : undefined;
+      const isLibrary = source === 'library';
+      const isCommunity = source === 'community';
+      const required = isLibrary ? ['sourceId'] : isCommunity ? ['sourceId', 'hasAudio'] : ['audio'];
+      const optional = isLibrary ? ['audioUrl'] : isCommunity ? [] : ['sourceId', 'visibility'];
+      const track = this.fields(value, at, [...trackDetails, ...required], ['artworkUrl', 'licenseUrl', ...optional]);
       if (!track) return;
       this.id(track.id, `${at}.id`);
       if (typeof track.id === 'string') { if (ids.has(track.id)) this.fail(`${at}.id`, 'Duplicate track ID in this cassette.'); ids.add(track.id); }
@@ -158,10 +205,17 @@ class Check {
       this.text(track.artist, `${at}.artist`, limits.artist, true);
       this.number(track.durationSec, `${at}.durationSec`, 0, limits.durationSec);
       this.choice(track.side, `${at}.side`, ['A', 'B']);
-      this.choice(track.source, `${at}.source`, ['library', 'upload', 'recording']);
-      if (Object.hasOwn(track, 'sourceId')) this.text(track.sourceId, `${at}.sourceId`, limits.id);
+      this.choice(track.source, `${at}.source`, ['library', 'community', 'upload', 'recording']);
+      if (isCommunity) this.id(track.sourceId, `${at}.sourceId`);
+      else if (Object.hasOwn(track, 'sourceId')) this.text(track.sourceId, `${at}.sourceId`, limits.id);
       if (isLibrary) this.choice(track.provider, `${at}.provider`, ['jamendo']);
-      else { this.choice(track.provider, `${at}.provider`, ['s3']); this.audio(track.audio, `${at}.audio`, track.source); }
+      else if (isCommunity) {
+        this.choice(track.provider, `${at}.provider`, ['explore']);
+        if (typeof track.hasAudio !== 'boolean') this.fail(`${at}.hasAudio`, 'Expected a boolean.');
+      } else {
+        this.choice(track.provider, `${at}.provider`, ['s3']); this.audio(track.audio, `${at}.audio`, track.source);
+        if (Object.hasOwn(track, 'visibility')) this.choice(track.visibility, `${at}.visibility`, visibilities);
+      }
       for (const field of ['audioUrl', 'artworkUrl', 'licenseUrl']) if (Object.hasOwn(track, field)) this.url(track[field], `${at}.${field}`);
     });
   }
@@ -218,6 +272,79 @@ export function validateCassetteDocument(value: unknown): CassetteValidationResu
     check.payload(document.payload, 'payload');
   }
   return check.finish(value, document?.payload);
+}
+
+export function validateSaveProfileRequest(value: unknown): CassetteValidationResult<SaveProfileRequest> {
+  const check = new Check();
+  const request = check.fields(value, '', ['favoriteTape']);
+  if (request && request.favoriteTape !== null) check.snapshot(request.favoriteTape, 'favoriteTape');
+  return check.finish(value);
+}
+
+export function validateProfileDocument(value: unknown): CassetteValidationResult<ProfileDocument> {
+  const check = new Check();
+  const document = check.fields(value, '', ['schemaVersion', 'updatedAt', 'favoriteTape']);
+  if (document) {
+    if (document.schemaVersion !== 1) check.fail('schemaVersion', 'Only schema version 1 is supported.');
+    check.timestamp(document.updatedAt, 'updatedAt');
+    if (document.favoriteTape !== null) check.snapshot(document.favoriteTape, 'favoriteTape');
+  }
+  return check.finish(value);
+}
+
+export function validatePublishProfileRequest(value: unknown): CassetteValidationResult<PublishProfileRequest> {
+  const check = new Check();
+  const request = check.fields(value, '', ['username', 'avatar', 'favoriteTape'], ['ifPublished']);
+  if (request) {
+    check.username(request.username, 'username');
+    check.avatar(request.avatar, 'avatar');
+    if (request.favoriteTape !== null) check.snapshot(request.favoriteTape, 'favoriteTape');
+    if (Object.hasOwn(request, 'ifPublished') && typeof request.ifPublished !== 'boolean') check.fail('ifPublished', 'Expected a boolean.');
+  }
+  return check.finish(value);
+}
+
+export function validatePublishSongRequest(value: unknown): CassetteValidationResult<PublishSongRequest> {
+  const check = new Check();
+  const request = check.fields(value, '', ['title', 'artist', 'durationSec', 'audio'], ['artworkUrl']);
+  if (request) {
+    check.text(request.title, 'title', limits.title);
+    check.text(request.artist, 'artist', limits.artist, true);
+    check.number(request.durationSec, 'durationSec', 0, limits.durationSec);
+    const audio = request.audio;
+    check.audio(audio, 'audio', audio && typeof audio === 'object' && 'source' in audio ? audio.source : undefined);
+    if (Object.hasOwn(request, 'artworkUrl')) check.url(request.artworkUrl, 'artworkUrl');
+  }
+  return check.finish(value);
+}
+
+export function validateUnpublishSongRequest(value: unknown): CassetteValidationResult<UnpublishSongRequest> {
+  const check = new Check();
+  const request = check.fields(value, '', ['objectKey']);
+  if (request) check.objectKey(request.objectKey, 'objectKey');
+  return check.finish(value);
+}
+
+export function validatePublishTapeRequest(value: unknown): CassetteValidationResult<PublishTapeRequest> {
+  const check = new Check();
+  const request = check.fields(value, '', ['cassette']);
+  if (request) check.payload(request.cassette, 'cassette');
+  return check.finish(value, request?.cassette);
+}
+
+/** Validates catalog records read back from storage or received by the browser. */
+export function validatePublicTape(value: unknown): CassetteValidationResult<PublicTape> {
+  const check = new Check();
+  const record = check.fields(value, '', ['id', 'owner', 'tape', 'publishedAt', 'updatedAt']);
+  if (record) {
+    check.id(record.id, 'id');
+    const owner = check.fields(record.owner, 'owner', ['userId', 'username']);
+    if (owner) { check.id(owner.userId, 'owner.userId'); check.username(owner.username, 'owner.username'); }
+    check.publicTapePayload(record.tape, 'tape');
+    check.timestamp(record.publishedAt, 'publishedAt');
+    check.timestamp(record.updatedAt, 'updatedAt');
+  }
+  return check.finish(value, record?.tape);
 }
 
 /**

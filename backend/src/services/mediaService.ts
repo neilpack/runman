@@ -95,3 +95,4 @@ export function createMediaService(repository: MediaRepository, storage: Private
     },
   };
 }
+export type MediaService = ReturnType<typeof createMediaService>;
