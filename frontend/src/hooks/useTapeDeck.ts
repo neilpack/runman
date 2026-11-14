@@ -7,6 +7,8 @@
 //   FF / REW ..... wind through the side at WIND_SPEED (with a tape-whirr sound, not the song),
 //                  crossing song boundaries, and auto-stop with a clunk at either end.
 //                  Press PLAY to listen from wherever you land.
+//   ⏮ / ⏭ ........ jump to the start of the previous / next song (⏮ on the first song restarts
+//                  it). Playing carries on into the new song; paused stays paused.
 //   FLIP / EJECT . stop and start over on the new side / tape
 //
 // The deck keeps a "tape position" (song index + seconds) of its own, so winding doesn't
@@ -40,6 +42,8 @@ export interface TapeDeck {
   duration: number;
   press(control: DeckControl): void;
   seek(seconds: number): void;
+  /** Jump to the start of the next (1) or previous (-1) song on this side. */
+  skip(direction: 1 | -1): void;
 }
 
 const playable = (t: Track) => Boolean(t.audioUrl || t.audioReference);
@@ -266,6 +270,32 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
     if (a && isLoaded(indexRef.current)) a.currentTime = p;
   };
 
+  const skip = (direction: 1 | -1) => {
+    if (!cassette) return;
+    const n = tracksRef.current.length;
+    if (n === 0) {
+      flash(`SIDE ${side} IS BLANK`);
+      return;
+    }
+    const to = indexRef.current + direction;
+    if (to >= n) {
+      flash('LAST SONG ON THIS SIDE');
+      return;
+    }
+    const target = Math.max(0, to); // Back from the first song just restarts it.
+    setNotice(undefined);
+    setIndex(target);
+    setPosition(0);
+    const a = audioRef.current;
+    if (a && isLoaded(target)) a.currentTime = 0;
+    // Playing carries straight on into the new song. Paused / stopped / winding keep their keys;
+    // the new song is simply where the tape now sits.
+    const keys = latchedRef.current;
+    if (keys.includes('play') && !keys.includes('pause') && !keys.includes('fastForward') && !keys.includes('rewind')) {
+      void startPlaying();
+    }
+  };
+
   // A new tape or a flipped side starts over at the first song with every key up.
   useEffect(() => {
     stopWinding();
@@ -374,5 +404,6 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
     duration,
     press,
     seek,
+    skip,
   };
 }

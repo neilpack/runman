@@ -405,6 +405,8 @@ function LibraryStudio() {
               duration: deck.duration,
               label: deck.trackCount ? `TRK ${deck.trackNumber}/${deck.trackCount}` : 'NO SONGS',
               onSeek: deck.seek,
+              onSkip: deck.skip,
+              canSkipNext: deck.trackNumber < deck.trackCount,
             }}
           />
           <div ref={pedestalRef} className={`pedestal${active ? ' occupied' : ''}`}>
