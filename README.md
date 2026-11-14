@@ -56,11 +56,14 @@ the locked dependencies for all workspaces.
 | Existing backend AWS helpers | AWS SDK v3 DynamoDB/S3 clients, document client, and S3 presigner |
 | Music search and audio | Browser `fetch`, audio/Web Audio, and MediaRecorder APIs; no extra library required |
 
-Set `JAMENDO_CLIENT_ID` in `backend/.env` (see `backend/.env.example`). The backend
-proxies Jamendo searches through `GET /api/music/search?q=...`.
-Authentication needs the public pool/client IDs in ignored `frontend/cognito-config.json`;
-packages alone do not create a pool. The frontend configures Amplify before rendering.
-Never put AWS/lab credentials or client secrets in browser files.
+For local development, no Jamendo setup is required: the backend uses Jamendo's documented
+read-only test client ID when `JAMENDO_CLIENT_ID` is unset. For deployment, set your own
+`JAMENDO_CLIENT_ID` in the backend environment. The backend proxies Jamendo searches so the
+client ID is not included in the browser bundle. The frontend calls
+`GET /api/music/search?q=...`.
+AWS runtime access also needs generated backend outputs and Amplify configuration;
+packages alone do not provision resources. Identity implementation is a separate change.
+Do not put AWS credentials in frontend code or commit generated outputs.
 
 AWS CLI is installed separately from npm dependencies. Cloud provisioning is a
 later checkpoint, not part of installing tooling or running the frontend.
@@ -142,6 +145,9 @@ flows and app-client settings have not been verified by the implementation agent
 The local cassette library at `/`, editor at `/cassettes/:id/edit`, Status, and About
 remain public prototypes. The branded `/login` form uses Cognito SRP through the
 Amplify SDK for sign-up, email confirmation/resend, password reset, and sign-in.
+Same-session sign-up confirmation completes SDK-managed SRP auto-sign-in and then
+opens `/library`. If that temporary SDK context expired/reloaded, confirmation
+returns to login with a clear message; passwords are not saved by the app.
 Welcome/login redirect confirmed sessions to `/library`; dashboard and login share
 one SDK-backed session store, with no custom session cookie. It waits for a
 settled authenticated identity and offers sign-out; account changes reset its local
