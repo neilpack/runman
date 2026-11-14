@@ -406,6 +406,7 @@ export function LibraryPage() {
           onDragOut={(id, x, y) => beginMove(id, x, y)}
           onEdit={(id) => navigate(`/cassettes/${id}/edit`)}
           onCreate={create}
+          onReorder={cassetteStore.reorder}
           dropHover={zone === 'drawer'}
           panelRef={drawerRef}
         />

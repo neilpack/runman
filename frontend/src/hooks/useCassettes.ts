@@ -90,6 +90,16 @@ export const cassetteStore = {
       ),
     );
   },
+  /**
+   * Put the library in the user's own order. `ids` lists tapes in their new order; any tape it
+   * leaves out keeps its place after them. Reordering isn't an edit, so updatedAt is untouched.
+   */
+  reorder(ids: string[]) {
+    const byId = new Map(cassettes.map((c) => [c.id, c]));
+    const listed = ids.map((id) => byId.get(id)).filter((c): c is Cassette => Boolean(c));
+    const rest = cassettes.filter((c) => !ids.includes(c.id));
+    commit([...listed, ...rest]);
+  },
   remove(id: string) {
     commit(cassettes.filter((c) => c.id !== id));
   },

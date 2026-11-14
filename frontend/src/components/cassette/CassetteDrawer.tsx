@@ -2,8 +2,10 @@
 // Open/close it by clicking the drawer front, or grab the front (or the drawer's header) and
 // drag it: it follows your hand and snaps open/closed on release (a quick flick counts too).
 // Click a tape spine to put that tape on the stage, or drag it straight out of the drawer.
+// In "My order" (the default sort) each spine has a grip on its left: drag it up/down, or focus
+// it and use the arrow keys, to arrange the library however you like.
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Cassette } from '@runman/shared';
 import { SHELL_TYPES, penFont } from './constants';
 import {
@@ -30,6 +32,8 @@ interface CassetteDrawerProps {
   onDragOut: (id: string, clientX: number, clientY: number) => void;
   onEdit: (id: string) => void;
   onCreate: () => void;
+  /** New arrangement of the whole library, as tape ids in order. */
+  onReorder: (ids: string[]) => void;
   /** Highlights the drawer as a "put it back" drop target. */
   dropHover?: boolean;
   panelRef?: React.RefObject<HTMLElement | null>;
@@ -38,6 +42,25 @@ interface CassetteDrawerProps {
 const DRAG_THRESHOLD = 8;
 const PULL_THRESHOLD = 5;
 const FLICK_SPEED = 0.5; // px per ms
+
+interface ArrangeState {
+  pointerId: number;
+  id: string;
+  startY: number;
+  startIndex: number;
+  /** Distance from one spine's top to the next (spine height + gap). */
+  pitch: number;
+  order: string[];
+  /** Slot the tape would land in if released now. */
+  target: number;
+}
+
+/** Move `id` to `to` within `ids`. */
+function moveTo(ids: string[], id: string, to: number): string[] {
+  const next = ids.filter((x) => x !== id);
+  next.splice(Math.max(0, Math.min(to, next.length)), 0, id);
+  return next;
+}
 
 interface PullState {
   pointerId: number;
@@ -61,6 +84,7 @@ export function CassetteDrawer({
   onDragOut,
   onEdit,
   onCreate,
+  onReorder,
   dropHover,
   panelRef,
 }: CassetteDrawerProps) {
@@ -71,9 +95,42 @@ export function CassetteDrawer({
   const [filter, setFilter] = useState<TapeFilter>(DEFAULT_FILTER);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const arrange = useRef<ArrangeState | null>(null);
+  /**
+   * While arranging. The list's DOM order stays put during the drag (moving the node under the
+   * pointer would drop its pointer capture and end the drag); tapes only slide visually.
+   */
+  const [arranging, setArranging] = useState<{ id: string; dy: number; from: number; to: number; pitch: number } | null>(
+    null,
+  );
 
-  const shown = filterTapes(cassettes, filter, loadedId);
+  /** One frame with transitions off after a drop, so tapes don't replay their slide from the old slot. */
+  const [settling, setSettling] = useState(false);
+  useEffect(() => {
+    if (!settling) return;
+    let inner = 0;
+    const outer = requestAnimationFrame(() => (inner = requestAnimationFrame(() => setSettling(false))));
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
+  }, [settling]);
+
   const filtering = isFiltering(filter);
+  // Your own order only makes sense on the full, unsorted list.
+  const canArrange = filter.sort === 'custom' && !filtering;
+  const shown = filterTapes(cassettes, filter, loadedId);
+
+  /** Visual offset of the spine at index i while a tape is being arranged. */
+  const arrangeShift = (i: number, id: string): number => {
+    if (!arranging) return 0;
+    const { from, to, pitch } = arranging;
+    if (id === arranging.id) return arranging.dy;
+    if (from < to && i > from && i <= to) return -pitch;
+    if (to < from && i >= to && i < from) return pitch;
+    return 0;
+  };
   const filterCount = activeFilterCount(filter);
   const patchFilter = (patch: Partial<TapeFilter>) => setFilter((f) => ({ ...f, ...patch }));
   const toggleIn = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
@@ -156,7 +213,7 @@ export function CassetteDrawer({
   // ---- Pulling a tape out of the drawer ----
   const onSpineDown = (e: React.PointerEvent<HTMLLIElement>, id: string) => {
     if (e.button !== 0) return;
-    if ((e.target as HTMLElement).closest('button')) return;
+    if ((e.target as HTMLElement).closest('button, .spine-grip')) return;
     pending.current = { id, x: e.clientX, y: e.clientY, pointerId: e.pointerId };
     // Keep receiving moves even if the pointer leaves the spine in one big jump.
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -177,6 +234,55 @@ export function CassetteDrawer({
     if (!p || p.pointerId !== e.pointerId) return;
     pending.current = null;
     onSelect(p.id);
+  };
+
+  // ---- Arranging tapes by their grip ----
+  const onGripDown = (e: React.PointerEvent<HTMLSpanElement>, id: string) => {
+    if (e.button !== 0 || !canArrange || !listRef.current) return;
+    e.preventDefault();
+    e.stopPropagation(); // Not a pick-up: the spine's own drag-out handler stays out of it.
+    const items = [...listRef.current.querySelectorAll<HTMLElement>(':scope > .spine')];
+    const order = shown.map((c) => c.id);
+    const startIndex = order.indexOf(id);
+    const pitch =
+      items.length > 1
+        ? items[1].getBoundingClientRect().top - items[0].getBoundingClientRect().top
+        : items[0]?.getBoundingClientRect().height || 58;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    arrange.current = { pointerId: e.pointerId, id, startY: e.clientY, startIndex, pitch, order, target: startIndex };
+    setArranging({ id, dy: 0, from: startIndex, to: startIndex, pitch });
+  };
+
+  const onGripMove = (e: React.PointerEvent<HTMLSpanElement>) => {
+    const a = arrange.current;
+    if (!a || a.pointerId !== e.pointerId) return;
+    const dy = e.clientY - a.startY;
+    // Keep the tape within the list.
+    const clamped = Math.max(-a.startIndex * a.pitch, Math.min((a.order.length - 1 - a.startIndex) * a.pitch, dy));
+    a.target = a.startIndex + Math.round(clamped / a.pitch);
+    // The tape follows the pointer; the others slide aside to open its new slot.
+    setArranging({ id: a.id, dy: clamped, from: a.startIndex, to: a.target, pitch: a.pitch });
+  };
+
+  const endArrange = (e: React.PointerEvent<HTMLSpanElement>) => {
+    const a = arrange.current;
+    if (!a || a.pointerId !== e.pointerId) return;
+    arrange.current = null;
+    setArranging(null);
+    setSettling(true);
+    if (a.target !== a.startIndex) onReorder(moveTo(a.order, a.id, a.target));
+  };
+
+  const onGripKey = (e: React.KeyboardEvent<HTMLSpanElement>, id: string) => {
+    if (!canArrange) return;
+    const order = shown.map((c) => c.id);
+    const i = order.indexOf(id);
+    const to =
+      e.key === 'ArrowUp' ? i - 1 : e.key === 'ArrowDown' ? i + 1 : e.key === 'Home' ? 0 : e.key === 'End' ? order.length - 1 : null;
+    if (to === null) return;
+    e.preventDefault();
+    if (to < 0 || to >= order.length || to === i) return;
+    onReorder(moveTo(order, id, to));
   };
 
   return (
@@ -350,18 +456,51 @@ export function CassetteDrawer({
           </div>
         )}
 
-        <ul className="drawer-list">
-          {shown.map((c) => (
+        <ul ref={listRef} className={`drawer-list${arranging ? ' arranging' : ''}${settling ? ' settling' : ''}`}>
+          {shown.map((c, i) => (
             <li
               key={c.id}
-              className={`spine${activeId === c.id ? ' on-stage' : ''}`}
-              style={{ '--shell': c.shellColor, '--label': c.labelColor, '--ink': c.inkColor } as React.CSSProperties}
+              className={`spine${activeId === c.id ? ' on-stage' : ''}${arranging?.id === c.id ? ' lifted' : ''}`}
+              style={
+                {
+                  '--shell': c.shellColor,
+                  '--label': c.labelColor,
+                  '--ink': c.inkColor,
+                  ...(arranging
+                    ? {
+                        transform:
+                          arranging.id === c.id
+                            ? `translate(-10px, ${arrangeShift(i, c.id)}px) rotate(-1.5deg)`
+                            : `translateY(${arrangeShift(i, c.id)}px)`,
+                      }
+                    : {}),
+                } as React.CSSProperties
+              }
               onPointerDown={(e) => onSpineDown(e, c.id)}
               onPointerMove={onSpineMove}
               onPointerUp={onSpineUp}
               onPointerCancel={() => (pending.current = null)}
               title="Click or drag out to pick up"
             >
+              {canArrange && (
+                <span
+                  className="spine-grip"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Move ${c.name || 'Untitled'}, position ${i + 1} of ${shown.length}. Use arrow keys.`}
+                  title="Drag to rearrange (or use the arrow keys)"
+                  onPointerDown={(e) => onGripDown(e, c.id)}
+                  onPointerMove={onGripMove}
+                  onPointerUp={endArrange}
+                  onPointerCancel={endArrange}
+                  onLostPointerCapture={endArrange}
+                  onKeyDown={(e) => onGripKey(e, c.id)}
+                >
+                  <svg viewBox="0 0 10 16" aria-hidden="true">
+                    {[3, 8, 13].flatMap((y) => [<circle key={`a${y}`} cx="2.5" cy={y} r="1.4" />, <circle key={`b${y}`} cx="7.5" cy={y} r="1.4" />])}
+                  </svg>
+                </span>
+              )}
               <span className="spine-label" style={{ fontFamily: penFont(c.penStyle) }}>
                 {c.name || 'Untitled'}
               </span>
