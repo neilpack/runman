@@ -1,8 +1,11 @@
+import type { CustomSticker, CustomStickerStroke } from './index.js';
 import type { CassetteDocument, CassetteValidationIssue, CassetteValidationResult, DeleteCassetteRequest, ListCassettesRequest, SaveCassetteRequest } from './cassettePersistence.js';
 import { CASSETTE_LIMITS as limits } from './cassettePersistence.js';
 
 const pens = ['handwritten', 'marker', 'script', 'typewriter', 'clean'];
 const trackDetails = ['id', 'title', 'artist', 'durationSec', 'side', 'source', 'provider'];
+/** Pen width range for hand-drawn stickers, in 100 × 100 canvas units. */
+export const CUSTOM_STROKE_WIDTH = { min: 0.5, max: 40 } as const;
 const visuals = ['labelColor', 'inkColor', 'penStyle', 'stickers'];
 const payloadFields = ['id', 'name', 'shellColor', 'shellType', ...visuals, 'tracks'];
 
@@ -74,6 +77,39 @@ class Check {
       this.color(sticker.color, `${at}.color`);
     });
   }
+  customStickers(value: unknown, path: string) {
+    if (!Array.isArray(value)) { this.fail(path, 'Expected a custom sticker array.'); return; }
+    if (value.length > limits.customStickers) this.fail(path, `At most ${limits.customStickers} custom stickers per cassette.`);
+    const ids = new Set<string>();
+    const slots = new Set<number>();
+    value.slice(0, limits.customStickers + 1).forEach((entry, index) => {
+      const at = `${path}[${index}]`;
+      const art = this.fields(entry, at, ['id', 'slot', 'strokes']);
+      if (!art) return;
+      this.id(art.id, `${at}.id`);
+      if (typeof art.id === 'string') { if (ids.has(art.id)) this.fail(`${at}.id`, 'Duplicate custom sticker ID.'); ids.add(art.id); }
+      this.number(art.slot, `${at}.slot`, 0, limits.customStickers - 1, true);
+      if (typeof art.slot === 'number') { if (slots.has(art.slot)) this.fail(`${at}.slot`, 'Two custom stickers share a slot.'); slots.add(art.slot); }
+      if (!Array.isArray(art.strokes)) { this.fail(`${at}.strokes`, 'Expected a stroke array.'); return; }
+      if (art.strokes.length > limits.customStickerStrokes) this.fail(`${at}.strokes`, `At most ${limits.customStickerStrokes} strokes per drawing.`);
+      let coords = 0;
+      const strokes: unknown[] = art.strokes;
+      strokes.slice(0, limits.customStickerStrokes + 1).forEach((raw, s) => {
+        const sp = `${at}.strokes[${s}]`;
+        const stroke = this.fields(raw, sp, ['color', 'width', 'points']);
+        if (!stroke) return;
+        this.color(stroke.color, `${sp}.color`);
+        this.number(stroke.width, `${sp}.width`, CUSTOM_STROKE_WIDTH.min, CUSTOM_STROKE_WIDTH.max);
+        const points = stroke.points;
+        if (!Array.isArray(points) || points.length < 2 || points.length % 2 ||
+          !points.every((n) => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= 100)) {
+          this.fail(`${sp}.points`, 'Expected [x, y, …] coordinate pairs from 0 to 100.'); return;
+        }
+        coords += points.length;
+      });
+      if (coords > limits.customStickerCoords) this.fail(`${at}.strokes`, `Drawing has more than ${limits.customStickerCoords} coordinates.`);
+    });
+  }
   audio(value: unknown, path: string, source: unknown) {
     const audio = this.fields(value, path, ['source', 'objectKey', 'contentType', 'sizeBytes']);
     if (!audio) return;
@@ -88,7 +124,7 @@ class Check {
     this.number(audio.sizeBytes, `${path}.sizeBytes`, 1, limits.audioBytes, true);
   }
   payload(value: unknown, path: string) {
-    const tape = this.fields(value, path, payloadFields, ['sideB']);
+    const tape = this.fields(value, path, payloadFields, ['sideB', 'customStickers']);
     if (!tape) return;
     this.id(tape.id, `${path}.id`);
     this.text(tape.name, `${path}.name`, limits.name, true);
@@ -106,6 +142,7 @@ class Check {
         if (Object.hasOwn(side, 'stickers')) this.stickers(side.stickers, `${path}.sideB.stickers`);
       }
     }
+    if (Object.hasOwn(tape, 'customStickers')) this.customStickers(tape.customStickers, `${path}.customStickers`);
     if (!Array.isArray(tape.tracks)) { this.fail(`${path}.tracks`, 'Expected a track array.'); return; }
     if (tape.tracks.length > limits.tracksPerCassette) this.fail(`${path}.tracks`, `At most ${limits.tracksPerCassette} tracks per cassette.`);
     const ids = new Set<string>();
@@ -181,4 +218,38 @@ export function validateCassetteDocument(value: unknown): CassetteValidationResu
     check.payload(document.payload, 'payload');
   }
   return check.finish(value, document?.payload);
+}
+
+/**
+ * Lenient reader for drawings coming from untrusted JSON (e.g. a public profile snapshot):
+ * drops anything malformed instead of failing, and never returns more than the save limits allow.
+ */
+export function sanitizeCustomStickers(raw: unknown): CustomSticker[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const hex = /^#(?:[a-f\d]{3}|[a-f\d]{6}|[a-f\d]{8})$/i;
+  const seen = new Set<string>();
+  const usedSlots = new Set<number>();
+  const out: CustomSticker[] = [];
+  for (const entry of raw.slice(0, limits.customStickers)) {
+    if (!entry || typeof entry !== 'object') continue;
+    const { id, slot, strokes } = entry as Record<string, unknown>;
+    if (typeof id !== 'string' || id.length > limits.id || !/^[a-zA-Z0-9_-]+$/.test(id) || seen.has(id) || !Array.isArray(strokes) ||
+      typeof slot !== 'number' || !Number.isInteger(slot) || slot < 0 || slot >= limits.customStickers || usedSlots.has(slot)) continue;
+    seen.add(id);
+    usedSlots.add(slot);
+    let budget = limits.customStickerCoords;
+    const clean: CustomStickerStroke[] = [];
+    for (const stroke of strokes.slice(0, limits.customStickerStrokes)) {
+      if (!stroke || typeof stroke !== 'object') continue;
+      const { color, width, points } = stroke as Record<string, unknown>;
+      if (typeof color !== 'string' || !hex.test(color) || typeof width !== 'number' || !Number.isFinite(width) ||
+        width < CUSTOM_STROKE_WIDTH.min || width > CUSTOM_STROKE_WIDTH.max || !Array.isArray(points) || points.length < 2 ||
+        points.length % 2 || points.length > budget ||
+        !points.every((n) => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= 100)) continue;
+      budget -= points.length;
+      clean.push({ color, width, points: points as number[] });
+    }
+    out.push({ id, slot, strokes: clean });
+  }
+  return out;
 }
