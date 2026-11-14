@@ -7,6 +7,89 @@
 
 .audio-input p { margin: 0; }
 .audio-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.audio-record-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.audio-record-icon {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
 .audio-preview { overflow-wrap: anywhere; }
 .audio-preview audio { display: block; width: 100%; margin-top: var(--space-3); }
-.audio-input input:focus-visible { outline: 2px solid var(--color-primary); outline-offset: var(--space-1); }
+.audio-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+.audio-file-picker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 68px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px dashed var(--color-primary);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.audio-file-picker:hover {
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  transform: translateY(-1px);
+}
+
+.audio-file-picker:focus-within {
+  outline: 2px solid var(--color-primary);
+  outline-offset: var(--space-1);
+}
+
+.audio-file-picker.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.audio-file-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 1.4rem;
+  font-weight: 800;
+}
+
+.audio-file-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.audio-file-copy strong,
+.audio-file-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audio-file-copy small {
+  color: var(--color-muted);
+}

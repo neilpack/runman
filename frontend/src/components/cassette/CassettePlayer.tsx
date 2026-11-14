@@ -80,6 +80,8 @@ export interface CassettePlayerProps {
   /** LCD text. Defaults to EJECTED / IDLE or the loaded tape name + side. */
   display?: string;
   onControl?: (control: DeckControl) => void;
+  /** Select a tape side directly from the A/B indicator. */
+  onSideChange?: (side: TapeSide) => void;
   /** Highlight the tape door as a drop target. */
   dropHover?: boolean;
   slotRef?: React.Ref<HTMLDivElement>;
@@ -204,6 +206,7 @@ export function CassettePlayer({
   latched,
   display,
   onControl,
+  onSideChange,
   dropHover = false,
   slotRef,
   progress,
@@ -235,6 +238,12 @@ export function CassettePlayer({
     // Keys springing back up get their own little clack.
     if (poppedUp) window.setTimeout(() => playSfx('keyRelease'), 70);
     onControl?.(key);
+  };
+
+  const selectSide = (next: TapeSide) => {
+    if (!loaded || next === side) return;
+    playSfx('flip');
+    onSideChange?.(next);
   };
 
   return (
@@ -304,9 +313,21 @@ export function CassettePlayer({
                 {muted ? <path d="M17 9l5 5M22 9l-5 5" /> : <path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" />}
               </svg>
             </button>
-            <div className={`wm-side${loaded ? '' : ' off'}`} aria-label={`Side ${side}`}>
-              <span className={side === 'A' ? 'on' : ''}>A</span>
-              <span className={side === 'B' ? 'on' : ''}>B</span>
+            <div className={`wm-side${loaded ? '' : ' off'}`} role="radiogroup" aria-label={`Tape side, currently side ${side}`}>
+              {(['A', 'B'] as const).map((candidate) => (
+                <button
+                  key={candidate}
+                  type="button"
+                  className={side === candidate ? 'on' : ''}
+                  onClick={() => selectSide(candidate)}
+                  disabled={!loaded}
+                  role="radio"
+                  aria-checked={side === candidate}
+                  aria-label={`Play side ${candidate}`}
+                >
+                  {candidate}
+                </button>
+              ))}
             </div>
           </div>
           <div className="wm-stripe" />

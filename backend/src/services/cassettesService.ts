@@ -3,8 +3,10 @@ import { HttpError } from '../middleware/errorHandler.js';
 import { CassetteCorrupt } from '../aws/dynamoCassettes.js';
 import { CassetteConflict, CassetteMissing, type CassetteRepository } from './cassetteRepository.js';
 import { createCassetteCursor } from './cassetteCursor.js';
+import type { MediaAuthorizer } from './mediaService.js';
+import type { CassettePayload, StoredAudioReference } from '@runman/shared';
 
-export function createCassettesService(repository: CassetteRepository, cursor: ReturnType<typeof createCassetteCursor>, clock = () => new Date().toISOString()) {
+export function createCassettesService(repository: CassetteRepository, cursor: ReturnType<typeof createCassetteCursor>, clock = () => new Date().toISOString(), authorizeAudio?: MediaAuthorizer) {
   function valid<T>(result: CassetteValidationResult<T>): T {
     if (!result.ok) throw new HttpError(400, 'Invalid cassette request.', result.issues);
     return result.value;
@@ -16,8 +18,30 @@ export function createCassettesService(repository: CassetteRepository, cursor: R
   function publicDocument(value: CassetteDocument, expectedId?: string) {
     const checked = validateCassetteDocument(value);
     if (!checked.ok || (expectedId !== undefined && checked.value.payload.id !== expectedId)) throw new CassetteCorrupt();
-    if (checked.value.payload.tracks.some((track) => track.source !== 'library')) throw new HttpError(422, 'Private audio references are not supported until server-side audio ownership checks are connected.');
     return checked.value;
+  }
+  async function authorize(owner: string, payloads: CassettePayload[]) {
+    const unique = new Map<string, StoredAudioReference>();
+    for (const payload of payloads) for (const track of payload.tracks) if (track.source !== 'library') {
+      const previous = unique.get(track.audio.objectKey);
+      if (previous && (previous.source !== track.audio.source || previous.contentType !== track.audio.contentType || previous.sizeBytes !== track.audio.sizeBytes)) throw new HttpError(422, 'Conflicting metadata for the same private audio object.');
+      unique.set(track.audio.objectKey, track.audio);
+    }
+    if (!unique.size) return;
+    if (!authorizeAudio) throw new HttpError(422, 'Private audio references are not supported until server-side audio ownership checks are connected.');
+    const references = [...unique.values()];
+    let index = 0;
+    let failed = false;
+    let failure: unknown;
+    // One bounded pool across the entire listing request, not one per tape.
+    await Promise.all(Array.from({ length: Math.min(4, references.length) }, async () => {
+      while (!failed && index < references.length) {
+        const reference = references[index++];
+        try { await authorizeAudio(owner, reference); }
+        catch (error) { if (!failed) { failed = true; failure = error; } }
+      }
+    }));
+    if (failed) throw failure;
   }
   async function storage<T>(action: () => Promise<T>): Promise<T> {
     try { return await action(); }
@@ -35,7 +59,9 @@ export function createCassettesService(repository: CassetteRepository, cursor: R
       return storage(async () => {
         const item = await repository.get(owner, pathId);
         if (!item) throw new CassetteMissing();
-        return { cassette: publicDocument(item, pathId) };
+        const cassette = publicDocument(item, pathId);
+        await authorize(owner, [cassette.payload]);
+        return { cassette };
       });
     },
     async save(owner: string, pathId: string, body: unknown) {
@@ -43,8 +69,10 @@ export function createCassettesService(repository: CassetteRepository, cursor: R
       const request = valid(validateSaveCassetteRequest(body));
       if (request.cassette.id !== pathId) throw new HttpError(400, 'Path ID must match the cassette ID.');
       if (request.expectedRevision >= Number.MAX_SAFE_INTEGER) throw new HttpError(400, 'Cassette revision cannot be incremented safely.');
-      if (request.cassette.tracks.some((track) => track.source !== 'library')) throw new HttpError(422, 'Private audio references are not supported until server-side audio ownership checks are connected.');
-      return storage(async () => ({ cassette: publicDocument(await repository.save(owner, request, clock()), pathId) }));
+      return storage(async () => {
+        await authorize(owner, [request.cassette]);
+        return { cassette: publicDocument(await repository.save(owner, request, clock()), pathId) };
+      });
     },
     async list(owner: string, input: unknown): Promise<ListCassettesResponse> {
       const request = valid(validateListCassettesRequest(input));
@@ -56,7 +84,22 @@ export function createCassettesService(repository: CassetteRepository, cursor: R
       }
       return storage(async () => {
         const page = await repository.list(owner, limit, afterId);
-        return { items: page.items.map((item) => publicDocument(item)), ...(page.afterId ? { nextCursor: cursor.encode(owner, limit, page.afterId) } : {}) };
+        const items: CassetteDocument[] = [];
+        const mediaKeys = new Set<string>();
+        let truncated = false;
+        for (const item of page.items) {
+          const document = publicDocument(item);
+          const keys = document.payload.tracks.flatMap((track) => track.source === 'library' ? [] : [track.audio.objectKey]);
+          const added = new Set(keys.filter((key) => !mediaKeys.has(key)));
+          // Bound total Dynamo/HEAD work as well as parallelism. The first
+          // cassette always fits because the shared track cap is 100.
+          if (mediaKeys.size + added.size > 100) { truncated = true; break; }
+          keys.forEach((key) => mediaKeys.add(key));
+          items.push(document);
+        }
+        await authorize(owner, items.map((item) => item.payload));
+        const nextAfterId = truncated ? items.at(-1)?.payload.id : page.afterId;
+        return { items, ...(nextAfterId ? { nextCursor: cursor.encode(owner, limit, nextAfterId) } : {}) };
       });
     },
     async remove(owner: string, pathId: string, body: unknown): Promise<DeleteCassetteResponse> {

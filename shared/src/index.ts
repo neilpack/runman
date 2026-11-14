@@ -3,6 +3,8 @@
 export * from './cassettePersistence.js';
 export * from './cassetteValidation.js';
 export * from './cassetteAdapters.js';
+export * from './mediaPersistence.js';
+export * from './mediaValidation.js';
 
 /** Persist only after upload succeeds. Playback URLs are temporary browser state. */
 export interface StoredAudioReference {
@@ -48,9 +50,30 @@ export type PenStyle = 'handwritten' | 'marker' | 'script' | 'typewriter' | 'cle
 
 /**
  * Sticker id: one of the built-in doodles ('heart', 'star', 'note', 'smiley', 'bolt', 'disc',
- * 'flower', 'sparkle') or an icon sticker id from frontend/src/components/cassette/stickerLibrary.ts.
+ * 'flower', 'sparkle'), an icon sticker id from frontend/src/components/cassette/stickerLibrary.ts,
+ * or `custom-<id>` pointing at one of the tape's own drawings in `Cassette.customStickers`.
  */
 export type StickerKind = string;
+
+/** Sticker kinds starting with this point at a drawing in `Cassette.customStickers`. */
+export const CUSTOM_STICKER_PREFIX = 'custom-';
+
+/** One pen stroke of a hand-drawn sticker, on a 100 × 100 canvas. */
+export interface CustomStickerStroke {
+  color: string;
+  /** Pen width in canvas units. */
+  width: number;
+  /** Flat [x0, y0, x1, y1, …] canvas coordinates (0-100). A single point draws a dot. */
+  points: number[];
+}
+
+/** A sticker the listener drew themselves. Stored as plain vector data, never markup. */
+export interface CustomSticker {
+  id: string;
+  /** Which of the editor's custom slots (0-4) holds this drawing. */
+  slot: number;
+  strokes: CustomStickerStroke[];
+}
 
 export interface Sticker {
   id: string;
@@ -119,6 +142,11 @@ export interface Cassette {
    * Missing B fields fall back to side A's values, except stickers, which default to none.
    */
   sideB?: Partial<SideLook>;
+  /**
+   * Up to 5 hand-drawn sticker slots, shared by both sides. Placed copies are ordinary stickers
+   * whose kind is `custom-<id>`, so editing a drawing updates every copy on the tape.
+   */
+  customStickers?: CustomSticker[];
   tracks: Track[];
   /** Public tapes can be viewed and added by anyone. Defaults to private. */
   visibility?: Visibility;
@@ -155,7 +183,7 @@ export interface MusicSearchResponse {
  */
 export type TapeSnapshot = Pick<
   Cassette,
-  'id' | 'name' | 'shellColor' | 'labelColor' | 'inkColor' | 'shellType' | 'penStyle' | 'stickers' | 'sideB' | 'updatedAt'
+  'id' | 'name' | 'shellColor' | 'labelColor' | 'inkColor' | 'shellType' | 'penStyle' | 'stickers' | 'sideB' | 'customStickers' | 'updatedAt'
 > & { trackCount: number };
 
 /** What other listeners can see on your profile. */
