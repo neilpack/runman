@@ -24,8 +24,8 @@
     "test:legacy-api": "tsc -p backend/tsconfig.test.json && tsx --tsconfig backend/tsconfig.test.json --test backend/tests/legacyExamples.test.ts",
     "test:cassettes": "tsc -p shared/tsconfig.test.json && tsx --tsconfig shared/tsconfig.test.json --test shared/tests/cassettes.test.ts",
     "test:cassette-api": "tsc -p backend/tsconfig.test.json && tsx --tsconfig backend/tsconfig.test.json --test backend/tests/cassetteHttp.test.ts backend/tests/cassetteSecurity.test.ts backend/tests/cassetteRepository.test.ts backend/tests/profile.test.ts",
-    "test:cassette-frontend": "tsc -p frontend/tsconfig.test.json && tsx --tsconfig frontend/tsconfig.test.json --test frontend/tests/cassetteClient.test.ts frontend/tests/cassetteStore.test.ts",
-    "test:explore": "tsc -p backend/tsconfig.test.json && tsx --tsconfig backend/tsconfig.test.json --test backend/tests/explore.test.ts",
+    "test:cassette-frontend": "tsc -p frontend/tsconfig.test.json && tsx --tsconfig frontend/tsconfig.test.json --test frontend/tests/cassetteClient.test.ts frontend/tests/cassetteStore.test.ts frontend/tests/publicSync.test.ts",
+    "test:explore": "tsc -p backend/tsconfig.test.json && tsx --tsconfig backend/tsconfig.test.json --test backend/tests/explore.test.ts backend/tests/explorePublishing.test.ts",
     "sticker": "npm run sticker -w @runman/frontend --"
   },
   "devDependencies": {

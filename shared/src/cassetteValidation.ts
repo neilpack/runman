@@ -2,6 +2,7 @@ import type { CustomSticker, CustomStickerStroke } from './index.js';
 import type { CassetteDocument, CassetteValidationIssue, CassetteValidationResult, DeleteCassetteRequest, ListCassettesRequest, SaveCassetteRequest } from './cassettePersistence.js';
 import { CASSETTE_LIMITS as limits } from './cassettePersistence.js';
 import type { ProfileDocument, SaveProfileRequest } from './profilePersistence.js';
+import type { PublicTape, PublishProfileRequest, PublishSongRequest, PublishTapeRequest, UnpublishSongRequest } from './explorePublishing.js';
 
 const pens = ['handwritten', 'marker', 'script', 'typewriter', 'clean'];
 const visibilities = ['private', 'public'];
@@ -112,15 +113,33 @@ class Check {
       if (coords > limits.customStickerCoords) this.fail(`${at}.strokes`, `Drawing has more than ${limits.customStickerCoords} coordinates.`);
     });
   }
+  objectKey(value: unknown, path: string) {
+    if (this.text(value, path, limits.objectKey) &&
+      (!/^[a-zA-Z0-9_./:@+-]+$/.test(value) || value.includes('://') || value.split('/').some((part) => !part || part === '.' || part === '..'))) this.fail(path, 'Expected a durable object key, not a URL or traversal path.');
+  }
+  username(value: unknown, path: string) {
+    if (typeof value !== 'string' || !/^[A-Za-z0-9](?:[A-Za-z0-9_.-]{1,22})[A-Za-z0-9]$/.test(value)) this.fail(path, 'Expected a 3-24 character username of letters, numbers, dots, dashes and underscores that starts and ends with a letter or number.');
+  }
+  avatar(value: unknown, path: string) {
+    if (value === null) return;
+    if (typeof value === 'string' && value.length <= 2000 && /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(value)) return;
+    this.url(value, path);
+  }
+  /** A tape as shown on Explore: no visibility and only Jamendo/Explore tracks. */
+  publicTapePayload(value: unknown, path: string) {
+    if (value && typeof value === 'object' && Object.hasOwn(value, 'visibility')) this.fail(`${path}.visibility`, 'Public tapes do not carry visibility.');
+    this.payload(value, path);
+    const tracks = value && typeof value === 'object' && 'tracks' in value && Array.isArray(value.tracks) ? value.tracks : [];
+    tracks.forEach((track: unknown, index: number) => {
+      if (track && typeof track === 'object' && 'provider' in track && track.provider === 's3') this.fail(`${path}.tracks[${index}]`, 'Public tapes cannot reference private audio.');
+    });
+  }
   audio(value: unknown, path: string, source: unknown) {
     const audio = this.fields(value, path, ['source', 'objectKey', 'contentType', 'sizeBytes']);
     if (!audio) return;
     this.choice(audio.source, `${path}.source`, ['upload', 'recording']);
     if (audio.source !== source) this.fail(`${path}.source`, 'Audio reference source must match the track.');
-    if (this.text(audio.objectKey, `${path}.objectKey`, limits.objectKey)) {
-      const key = audio.objectKey;
-      if (!/^[a-zA-Z0-9_./:@+-]+$/.test(key) || key.includes('://') || key.split('/').some((part) => !part || part === '.' || part === '..')) this.fail(`${path}.objectKey`, 'Expected a durable object key, not a URL or traversal path.');
-    }
+    this.objectKey(audio.objectKey, `${path}.objectKey`);
     if (this.text(audio.contentType, `${path}.contentType`, 128) &&
       !/^audio\/(?:mpeg|mp3|mp4|aac|x-m4a|wav|wave|x-wav|ogg|webm|flac)(?:;\s?codecs=[a-z\d.,_-]{1,80})?$/i.test(audio.contentType)) this.fail(`${path}.contentType`, 'Unsupported audio content type.');
     this.number(audio.sizeBytes, `${path}.sizeBytes`, 1, limits.audioBytes, true);
@@ -271,6 +290,61 @@ export function validateProfileDocument(value: unknown): CassetteValidationResul
     if (document.favoriteTape !== null) check.snapshot(document.favoriteTape, 'favoriteTape');
   }
   return check.finish(value);
+}
+
+export function validatePublishProfileRequest(value: unknown): CassetteValidationResult<PublishProfileRequest> {
+  const check = new Check();
+  const request = check.fields(value, '', ['username', 'avatar', 'favoriteTape'], ['ifPublished']);
+  if (request) {
+    check.username(request.username, 'username');
+    check.avatar(request.avatar, 'avatar');
+    if (request.favoriteTape !== null) check.snapshot(request.favoriteTape, 'favoriteTape');
+    if (Object.hasOwn(request, 'ifPublished') && typeof request.ifPublished !== 'boolean') check.fail('ifPublished', 'Expected a boolean.');
+  }
+  return check.finish(value);
+}
+
+export function validatePublishSongRequest(value: unknown): CassetteValidationResult<PublishSongRequest> {
+  const check = new Check();
+  const request = check.fields(value, '', ['title', 'artist', 'durationSec', 'audio'], ['artworkUrl']);
+  if (request) {
+    check.text(request.title, 'title', limits.title);
+    check.text(request.artist, 'artist', limits.artist, true);
+    check.number(request.durationSec, 'durationSec', 0, limits.durationSec);
+    const audio = request.audio;
+    check.audio(audio, 'audio', audio && typeof audio === 'object' && 'source' in audio ? audio.source : undefined);
+    if (Object.hasOwn(request, 'artworkUrl')) check.url(request.artworkUrl, 'artworkUrl');
+  }
+  return check.finish(value);
+}
+
+export function validateUnpublishSongRequest(value: unknown): CassetteValidationResult<UnpublishSongRequest> {
+  const check = new Check();
+  const request = check.fields(value, '', ['objectKey']);
+  if (request) check.objectKey(request.objectKey, 'objectKey');
+  return check.finish(value);
+}
+
+export function validatePublishTapeRequest(value: unknown): CassetteValidationResult<PublishTapeRequest> {
+  const check = new Check();
+  const request = check.fields(value, '', ['cassette']);
+  if (request) check.payload(request.cassette, 'cassette');
+  return check.finish(value, request?.cassette);
+}
+
+/** Validates catalog records read back from storage or received by the browser. */
+export function validatePublicTape(value: unknown): CassetteValidationResult<PublicTape> {
+  const check = new Check();
+  const record = check.fields(value, '', ['id', 'owner', 'tape', 'publishedAt', 'updatedAt']);
+  if (record) {
+    check.id(record.id, 'id');
+    const owner = check.fields(record.owner, 'owner', ['userId', 'username']);
+    if (owner) { check.id(owner.userId, 'owner.userId'); check.username(owner.username, 'owner.username'); }
+    check.publicTapePayload(record.tape, 'tape');
+    check.timestamp(record.publishedAt, 'publishedAt');
+    check.timestamp(record.updatedAt, 'updatedAt');
+  }
+  return check.finish(value, record?.tape);
 }
 
 /**

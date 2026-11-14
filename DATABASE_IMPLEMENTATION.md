@@ -224,5 +224,35 @@ Audit after #32 (public/private), #34 (custom stickers) and #22/#29 (account/Exp
 - **Lambda/API Gateway:** a deployed HTTP API needs explicit `GET /api/profile` and
   `PUT /api/profile` routes (plus CORS PUT) before this works live. Not deployed by agents.
 
-Still open (not database): publishing public tapes/songs to the Explore catalog
-(`frontend/src/api/publicSync.ts` stubs) and writing `public/profiles/<sub>.json`.
+Superseded below: publishing is now in DynamoDB (see "Explore publishing").
+
+## Explore publishing — 2026-11-14
+
+Public tapes, songs and profiles now live in the cassettes table (contract and layout in
+`shared/src/explorePublishing.ts`). All reads are `Query` on fixed partitions, never `Scan`:
+
+| PK | SK | Holds |
+| --- | --- | --- |
+| `EXPLORE#PROFILE` | `<sub>` | username, avatar, favorite tape snapshot |
+| `EXPLORE#USERNAME` | lowercase name | `ownerId`; transaction-claimed so names stay unique |
+| `EXPLORE#SONG` | songId | title/artist/duration, owner, private `audio` reference, `addCount` |
+| `EXPLORE#TAPE` | tapeId | `PublicTape` (look + Jamendo/Explore tracks only) |
+| `EXPLORE#ADD#<songId>` | `<sub>` | one row per listener, dedupes `addCount` |
+
+- IDs are server-derived hashes of (owner, audio object key) / (owner, cassette id); writes are
+  conditioned on the owner, so nobody can overwrite or delete another account's rows.
+- Songs require the caller's own READY media (`media.authorize`). Audio is not copied: the stable
+  `/api/explore/songs/:id/audio` URL presigns the owner's version-pinned private object through
+  the media service. Without the media runtime, song publishing answers 503.
+- Tapes drop private uploads; public uploads appear only once published as songs, as
+  `community` tracks. No private object key ever reaches a public tape.
+- A profile (chosen username) is required before songs/tapes (409). The frontend publishes it on
+  first share and re-sends it on account edits only if already published (`ifPublished`).
+- Explore source: `dynamodb` storage mode → catalog `dynamodb`; `memory` → in-memory catalog plus
+  sample data; otherwise the previous S3/sample/empty behavior. Listings are cached 15 s per
+  instance and invalidated on that instance's writes.
+- Limits/known gaps: each partition is read up to 2000 rows (hackathon scale; hot partitions);
+  unpublishing a song removes it everywhere even if it is on another public tape; there is no
+  browse UI for public tapes yet (`api.exploreTapes` / `api.publicTape` exist); `EXPLORE#ADD#…`
+  rows stay after a song is unpublished; LabRole needs `dynamodb:TransactWriteItems` and `Query`
+  on the table.

@@ -103,6 +103,14 @@ authorized temporary credentials when run outside Lambda.
    | GET | `/api/explore/songs/{id}/audio` |
    | GET | `/api/explore/profiles` |
    | GET | `/api/explore/profiles/{username}` |
+   | GET | `/api/explore/tapes` |
+   | GET | `/api/explore/tapes/{id}` |
+   | PUT | `/api/explore/mine/profile` |
+   | PUT | `/api/explore/mine/songs` |
+   | DELETE | `/api/explore/mine/songs` |
+   | PUT | `/api/explore/mine/tapes/{id}` |
+   | DELETE | `/api/explore/mine/tapes/{id}` |
+   | POST | `/api/explore/songs/{id}/adds` |
 
    The Explore routes were added by the newer main branch. Add them when manually
    deploying this updated bundle; existing deployed code is not updated by Git.

@@ -10,10 +10,10 @@ import { createCassettesRouter, type CassetteApiOptions } from './routes/cassett
 import { createMediaRouter, type MediaApiOptions } from './routes/media.js';
 import { createProfileRouter, type ProfileApiOptions } from './routes/profile.js';
 import { createMediaRuntime } from './services/mediaRuntime.js';
-import { exploreRouter } from './routes/explore.js';
+import { createExploreApi, type ExploreApiOptions } from './routes/explore.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 
-export function createApp({ disableLegacyExamples = false, cassetteApi, mediaApi, profileApi }: { disableLegacyExamples?: boolean; cassetteApi?: CassetteApiOptions; mediaApi?: MediaApiOptions; profileApi?: ProfileApiOptions } = {}) {
+export function createApp({ disableLegacyExamples = false, cassetteApi, mediaApi, profileApi, exploreApi }: { disableLegacyExamples?: boolean; cassetteApi?: CassetteApiOptions; mediaApi?: MediaApiOptions; profileApi?: ProfileApiOptions; exploreApi?: ExploreApiOptions } = {}) {
   const app = express();
   const allowLegacyExamples = config.legacyExamplesEnabled && !disableLegacyExamples;
 
@@ -27,13 +27,14 @@ export function createApp({ disableLegacyExamples = false, cassetteApi, mediaApi
   app.use('/api/media', createMediaRouter(mediaApi, media));
   app.use('/api/cassettes', createCassettesRouter({ ...cassetteApi, authorizeAudio: cassetteApi?.authorizeAudio ?? media?.authorize }));
   app.use('/api/profile', createProfileRouter(profileApi));
+  // Explore publishing parses its own bounded JSON after authentication.
+  app.use('/api/explore', createExploreApi({ ...exploreApi, media: exploreApi?.media ?? media }));
   app.use(express.json());
 
   // Register routes here. All API routes live under /api.
   app.use('/api/health', healthRouter);
   if (allowLegacyExamples) app.use('/api/items', itemsRouter);
   app.use('/api/music', musicRouter);
-  app.use('/api/explore', exploreRouter);
 
   app.use(notFound);
   app.use(errorHandler);
