@@ -1,31 +1,15 @@
 // Account/profile data model and validation. Pure: no SDK, DOM, or React, so it is unit-testable.
 //
-// When a profiles API exists, move PublicProfile/TapeSnapshot into @runman/shared as the contract.
+// PublicProfile/TapeSnapshot are the Explore API contract, so they live in @runman/shared.
 
-import type { Cassette } from '@runman/shared';
+import type { Cassette, PublicProfile, TapeSnapshot } from '@runman/shared';
+
+export type { PublicProfile, TapeSnapshot };
 
 /** Cognito caps every attribute value at 2048 characters; keep headroom for the data-URL prefix. */
 export const AVATAR_MAX_CHARS = 2000;
 export const USERNAME_MIN = 3;
 export const USERNAME_MAX = 24;
-
-/**
- * A tape's look, frozen when it was picked as a favorite. Other listeners see this snapshot,
- * never your private library (tracks/audio are deliberately not included).
- */
-export type TapeSnapshot = Pick<
-  Cassette,
-  'id' | 'name' | 'shellColor' | 'labelColor' | 'inkColor' | 'shellType' | 'penStyle' | 'stickers' | 'sideB' | 'updatedAt'
-> & { trackCount: number };
-
-/** What other listeners can see on your profile. */
-export interface PublicProfile {
-  userId: string;
-  username: string;
-  /** Safe image URL (see isSafeAvatar), or null for the initials fallback. */
-  avatar: string | null;
-  favoriteTape: TapeSnapshot | null;
-}
 
 /** Your own account: the public profile plus private fields. */
 export interface AccountProfile extends PublicProfile {

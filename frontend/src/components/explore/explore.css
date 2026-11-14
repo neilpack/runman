@@ -1,0 +1,818 @@
+/* Explore + listener pages. Uses theme tokens from styles/global.css (light and dark). */
+
+.explore {
+  --ex-hover: color-mix(in srgb, var(--color-text) 5%, transparent);
+}
+
+/* Starry backdrop, matching the Library (library.css, BACKDROP = 'welcome'). Covers the whole
+   page behind the header and content. The sky is always dark, so the content below the header
+   keeps the dark-theme tokens (identical to global.css's dark mode) to stay readable in light mode. */
+.app-shell:has(.explore) {
+  background: linear-gradient(to right, var(--brand-dark-background), var(--brand-dark-background-light));
+}
+
+.app-shell:has(.explore)::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle, #fff 0 1px, transparent 1.5px),
+    radial-gradient(circle, #ff2e88 0 1px, transparent 1.5px),
+    radial-gradient(circle, #13e0c4 0 1px, transparent 1.5px);
+  background-size: 140px 120px, 210px 170px, 260px 230px;
+  background-position: 0 0, 60px 40px, 120px 90px;
+  opacity: 0.35;
+  animation: ex-stars 3s ease-in-out infinite alternate;
+}
+
+.app-shell:has(.explore) > * {
+  position: relative;
+  z-index: 1;
+}
+
+.app-shell:has(.explore) .app-main {
+  --color-bg: #0b1120;
+  --color-surface: #111827;
+  --color-text: #e5e7eb;
+  --color-muted: #94a3b8;
+  --color-border: #1f2937;
+  --color-primary: #6366f1;
+  --color-primary-hover: #818cf8;
+  color: var(--color-text);
+  color-scheme: dark;
+}
+
+@keyframes ex-stars {
+  to {
+    opacity: 0.7;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell:has(.explore)::before {
+    animation: none;
+  }
+}
+
+.ex-head h1,
+.ex-head p {
+  margin: 0;
+}
+
+.ex-head p {
+  margin-top: var(--space-1);
+}
+
+/* Tabs */
+.ex-tabs {
+  display: flex;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.ex-tabs button {
+  position: relative;
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-family: var(--font-display);
+  font-synthesis: none;
+  font-size: 1.05rem;
+  cursor: pointer;
+}
+
+.ex-tabs button:hover {
+  color: var(--color-text);
+}
+
+.ex-tabs button.on {
+  color: var(--color-text);
+}
+
+.ex-tabs button.on::after {
+  content: '';
+  position: absolute;
+  left: var(--space-3);
+  right: var(--space-3);
+  bottom: -1px;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--brand-accent);
+}
+
+.ex-tabs button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+  border-radius: var(--radius);
+}
+
+.ex-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* Search */
+.ex-search {
+  position: relative;
+  display: flex;
+}
+
+.ex-search svg {
+  position: absolute;
+  left: var(--space-3);
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  transform: translateY(-50%);
+  fill: none;
+  stroke: var(--color-muted);
+  stroke-width: 2;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.ex-search .input {
+  padding: var(--space-3) var(--space-3) var(--space-3) 40px;
+  font-size: 1rem;
+  background: var(--color-surface);
+}
+
+.ex-search .input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+/* Sections */
+.ex-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.ex-section-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: 1.2rem;
+  overflow-wrap: anywhere;
+}
+
+.ex-flame {
+  font-size: 1rem;
+}
+
+.ex-count {
+  padding: 0 var(--space-2);
+  border-radius: 999px;
+  background: var(--color-border);
+  color: var(--color-muted);
+  font-family: var(--font);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.ex-note {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--brand-accent) 45%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--brand-accent) 10%, transparent);
+  font-size: 0.92rem;
+}
+
+.ex-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
+}
+
+.ex-empty p {
+  margin: 0;
+}
+
+.ex-more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ex-more p {
+  margin: 0;
+}
+
+/* Artwork / preview button */
+.ex-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: linear-gradient(
+    135deg,
+    hsl(var(--art-hue, 210) 60% 58%),
+    hsl(calc(var(--art-hue, 210) + 50) 55% 40%)
+  );
+  color: #fff;
+  font: inherit;
+}
+
+.ex-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ex-art-glyph {
+  font-size: 1.4em;
+  opacity: 0.85;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.ex-art-play {
+  cursor: pointer;
+}
+
+.ex-art-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.4);
+  font-size: 1rem;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.ex-art-play:hover .ex-art-overlay,
+.ex-art-play:focus-visible .ex-art-overlay,
+.ex-art-play.is-playing .ex-art-overlay,
+.ex-art-play.is-loading .ex-art-overlay,
+.ex-art-play.is-error .ex-art-overlay {
+  opacity: 1;
+}
+
+.ex-art-play.is-loading .ex-art-overlay {
+  animation: ex-pulse 1s ease-in-out infinite;
+}
+
+.ex-art-play.is-error .ex-art-overlay {
+  background: color-mix(in srgb, var(--color-danger) 60%, transparent);
+}
+
+.ex-art-play:focus-visible {
+  outline: 2px solid var(--brand-accent);
+  outline-offset: 2px;
+}
+
+/* Song rows */
+.ex-songs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ex-song {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  border-radius: var(--radius);
+}
+
+.ex-song:hover {
+  background: var(--ex-hover);
+}
+
+.ex-song + .ex-song {
+  border-top: 1px solid var(--color-border);
+}
+
+/* On the Explore page (all shared songs / search results), each row is its own card, matching
+   the trending cards. The listener page's list sits inside a card already, so it stays flat. */
+.ex-section > .ex-songs {
+  gap: var(--space-2);
+}
+
+.ex-section > .ex-songs .ex-song {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.ex-section > .ex-songs .ex-song:hover {
+  background: color-mix(in srgb, var(--color-text) 4%, var(--color-surface));
+}
+
+.ex-song-meta {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.ex-song-meta strong,
+.ex-song-meta small {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ex-song-meta small {
+  color: var(--color-muted);
+}
+
+.ex-uploader {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.ex-uploader:hover {
+  text-decoration: underline;
+}
+
+.ex-song-time {
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+}
+
+.ex-add {
+  flex: none;
+  padding: var(--space-1) var(--space-3);
+  white-space: nowrap;
+}
+
+.ex-add:hover:not(:disabled) {
+  border-color: var(--brand-accent);
+}
+
+/* Trending: five ranked cards */
+.ex-trending {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.ex-trend {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.ex-trend-rank {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-3);
+  font-family: var(--font-display);
+  font-synthesis: none;
+  font-size: 1.9rem;
+  line-height: 1;
+  color: var(--brand-accent);
+}
+
+.ex-trend-meta {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+}
+
+.ex-trend-meta > * {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ex-trend-meta small {
+  color: var(--color-muted);
+}
+
+.ex-trend-meta .ex-uploader {
+  font-size: 0.85rem;
+}
+
+.ex-trend-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  margin-top: auto;
+}
+
+/* Listener search results */
+.ex-listeners {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr));
+  gap: var(--space-4);
+}
+
+.ex-listener {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  height: 100%;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-decoration: none;
+  transition: transform 0.15s, border-color 0.15s;
+}
+
+.ex-listener:hover {
+  transform: translateY(-2px);
+  border-color: var(--brand-accent);
+}
+
+.ex-listener:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.ex-listener-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.ex-listener-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ex-listener-name strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ex-listener-tape {
+  container-type: inline-size;
+  display: block;
+  pointer-events: none;
+}
+
+.ex-listener-notape {
+  display: grid;
+  place-items: center;
+  flex: 1;
+  min-height: 80px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+}
+
+/* Listener page */
+.ex-back {
+  align-self: flex-start;
+  color: var(--color-muted);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.ex-back:hover {
+  color: var(--color-text);
+}
+
+.ex-listener-hero {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.ex-listener-hero > div {
+  min-width: 0;
+}
+
+.ex-listener-hero p {
+  margin: 0;
+}
+
+.ex-listener-title,
+.ex-missing-title {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.ex-missing-title {
+  font-size: 1.3rem;
+}
+
+.ex-listener-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.ex-display-tape {
+  container-type: inline-size;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: var(--radius);
+}
+
+.ex-display-tape:focus-visible {
+  outline: 2px solid var(--brand-accent);
+  outline-offset: var(--space-1);
+}
+
+.ex-display-meta {
+  margin: var(--space-3) 0 0;
+  overflow-wrap: anywhere;
+}
+
+.ex-shared .ex-song {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.ex-shared .ex-song:hover {
+  background: none;
+}
+
+/* Add-to-tape dialog */
+.ex-dialog {
+  width: min(480px, calc(100vw - 32px));
+  max-height: min(640px, calc(100dvh - 32px));
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.35);
+}
+
+.ex-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(3px);
+}
+
+.ex-dialog[open] {
+  animation: ex-pop 0.2s ease-out;
+}
+
+.ex-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-6);
+}
+
+.ex-dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.ex-dialog-head h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.ex-dialog-head p {
+  margin: var(--space-1) 0 0;
+  overflow-wrap: anywhere;
+}
+
+.ex-icon-btn {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.ex-icon-btn:hover {
+  color: var(--color-text);
+}
+
+.ex-seg {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+}
+
+.ex-seg button {
+  padding: var(--space-1) var(--space-4);
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ex-seg button.on {
+  background: var(--brand-accent);
+  color: #fff;
+}
+
+.ex-tapes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ex-tape {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.ex-tape:hover:not(:disabled) {
+  border-color: var(--brand-accent);
+}
+
+.ex-tape:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.ex-tape:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.ex-tape-face {
+  flex: none;
+  pointer-events: none;
+}
+
+.ex-tape-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ex-tape-text strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ex-tape-warn {
+  color: var(--color-danger);
+}
+
+.ex-new-tape {
+  align-self: flex-start;
+}
+
+.ex-dialog-done {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.ex-dialog-done p {
+  margin: 0;
+}
+
+.ex-dialog-done .row {
+  flex-wrap: wrap;
+}
+
+/* Loading placeholders */
+.ex-skeleton .ex-art,
+.ex-skel-line {
+  background: var(--color-border);
+  animation: ex-pulse 1.2s ease-in-out infinite;
+}
+
+.ex-skel-line {
+  display: block;
+  width: 55%;
+  height: 0.8em;
+  margin: 0.25em 0;
+  border-radius: 4px;
+}
+
+.ex-skel-line.short {
+  width: 30%;
+}
+
+@keyframes ex-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes ex-pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+/* Responsive */
+@media (max-width: 860px) {
+  /* Trending becomes a swipeable row instead of squeezing five cards. */
+  .ex-trending {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(150px, 42%);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    padding-bottom: var(--space-2);
+  }
+
+  .ex-trend {
+    scroll-snap-align: start;
+  }
+
+  .ex-listener-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 520px) {
+  .ex-add-long,
+  .ex-song-time {
+    display: none;
+  }
+
+  .ex-dialog-body {
+    padding: var(--space-4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ex-listener,
+  .ex-art-overlay {
+    transition: none;
+  }
+
+  .ex-listener:hover {
+    transform: none;
+  }
+
+  .ex-dialog[open],
+  .ex-skeleton .ex-art,
+  .ex-skel-line,
+  .ex-art-play.is-loading .ex-art-overlay {
+    animation: none;
+  }
+}

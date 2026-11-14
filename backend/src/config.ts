@@ -21,6 +21,13 @@ export function readConfig(env: NodeJS.ProcessEnv) {
       itemsTable: env.ITEMS_TABLE || undefined,
       uploadsBucket: env.UPLOADS_BUCKET || undefined,
     },
+    explore: {
+      /**
+       * With no UPLOADS_BUCKET, Explore serves built-in sample songs/listeners so the page works
+       * locally. Never in deployed environments: there it shows an empty catalog instead.
+       */
+      demoCatalog: !isDeployed,
+    },
     jamendo: {
       clientId: env.JAMENDO_CLIENT_ID || (isDeployed ? undefined : localJamendoTestClientId),
       apiUrl: env.JAMENDO_API_URL ?? 'https://api.jamendo.com/v3.0',

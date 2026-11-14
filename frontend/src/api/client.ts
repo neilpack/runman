@@ -4,10 +4,25 @@ import type {
   CreateItemRequest,
   HealthResponse,
   Item,
+  ListenerProfileResponse,
+  ListenerSearchResponse,
   MusicSearchResponse,
+  PublicSongPage,
+  TrendingSongsResponse,
 } from '@runman/shared';
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? '';
+
+/** Thrown for non-2xx responses; `status` lets callers tell "not found" from "server down". */
+export class ApiRequestError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = 'ApiRequestError';
+  }
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
@@ -16,9 +31,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error ?? `Request failed: ${res.status}`);
+    throw new ApiRequestError(body.error ?? `Request failed: ${res.status}`, res.status);
   }
   return (res.status === 204 ? undefined : await res.json()) as T;
+}
+
+function query(params: Record<string, string | number | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== '') search.set(key, String(value));
+  }
+  const s = search.toString();
+  return s ? `?${s}` : '';
 }
 
 export const api = {
@@ -33,4 +57,15 @@ export const api = {
     if (options?.offset !== undefined) params.set('offset', String(options.offset));
     return request<MusicSearchResponse>(`/api/music/search?${params.toString()}`, { signal });
   },
+
+  // Explore: public songs and listener profiles.
+  exploreSongs: (params: { q?: string; limit?: number; offset?: number }, signal?: AbortSignal) =>
+    request<PublicSongPage>(`/api/explore/songs${query(params)}`, { signal }),
+  trendingSongs: (signal?: AbortSignal) => request<TrendingSongsResponse>('/api/explore/songs/trending', { signal }),
+  searchListeners: (q: string, signal?: AbortSignal) =>
+    request<ListenerSearchResponse>(`/api/explore/profiles${query({ q })}`, { signal }),
+  listener: (username: string, signal?: AbortSignal) =>
+    request<ListenerProfileResponse>(`/api/explore/profiles/${encodeURIComponent(username)}`, { signal }),
+  /** Stable, storable audio URL for a public song (the server redirects to a fresh S3 link). */
+  publicSongAudioUrl: (songId: string) => `${BASE_URL}/api/explore/songs/${encodeURIComponent(songId)}/audio`,
 };

@@ -18,7 +18,8 @@
     "test:audio": "tsc -p frontend/tsconfig.test.json && tsx --tsconfig frontend/tsconfig.test.json --test frontend/tests/audioStorage.test.ts frontend/tests/recordAudio.test.ts",
     "test:account": "tsc -p frontend/tsconfig.test.json && tsx --tsconfig frontend/tsconfig.test.json --test frontend/tests/account.test.ts",
     "test:legacy-api": "tsc -p backend/tsconfig.test.json && tsx --tsconfig backend/tsconfig.test.json --test backend/tests/legacyExamples.test.ts",
-    "sticker": "npm run sticker -w @runman/frontend --"
+    "test:explore": "tsc -p backend/tsconfig.test.json && tsx --tsconfig backend/tsconfig.test.json --test backend/tests/explore.test.ts",
+    "sticker":"npm run sticker -w @runman/frontend --"
   },
   "devDependencies": {
     "@aws-amplify/backend": "^1.25.1",
