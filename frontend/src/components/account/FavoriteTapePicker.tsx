@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '@/components/Button';
 import { CassetteFace } from '@/components/cassette/CassetteFace';
-import { useCassettes } from '@/hooks/useCassettes';
+import { cassetteStore, useCassettes, useCassetteSync } from '@/hooks/useCassettes';
 import { accountStore } from '@/profile/account';
 import { snapshotTape, type AccountProfile } from '@/profile/profileModel';
 import { FormNote, type Note } from './FormNote';
 
 export function FavoriteTapePicker({ profile }: { profile: AccountProfile }) {
   const cassettes = useCassettes();
+  const sync = useCassetteSync();
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<Note | null>(null);
   const favorite = profile.favoriteTape;
@@ -30,6 +31,8 @@ export function FavoriteTapePicker({ profile }: { profile: AccountProfile }) {
   }
 
   if (cassettes.length === 0) {
+    if (sync.loading) return <p className="muted" role="status">Loading your tapes…</p>;
+    if (sync.listError) return <p role="alert">Your saved tapes could not be loaded. <button type="button" onClick={() => void cassetteStore.refresh()}>Retry loading</button></p>;
     return (
       <p className="muted">
         You don't have any tapes yet. <Link to="/library">Make one in your library</Link>, then come back to pick a favorite.
@@ -41,9 +44,10 @@ export function FavoriteTapePicker({ profile }: { profile: AccountProfile }) {
     <div className="account-fav">
       {favorite && !live && (
         <p className="account-hint muted">
-          "{favorite.name || 'Untitled'}" is no longer in your library, but it stays on your profile until you pick another.
+          "{favorite.name || 'Untitled'}" is not in the currently loaded tapes. Your favorite stays on your profile until you pick another.
         </p>
       )}
+      {sync.nextCursor && <button type="button" disabled={sync.loading} onClick={() => void cassetteStore.loadMore()}>Load more saved tapes</button>}
       <div className="account-tapes" role="group" aria-label="Pick your favorite tape">
         {cassettes.map((c) => {
           const selected = favorite?.id === c.id;

@@ -8,6 +8,8 @@
     "frontend"
   ],
   "scripts": {
+    "package:backend": "npm run build -w backend && node scripts/package-backend.mjs",
+    "test:deployment": "node --test scripts/tests/package-backend.test.mjs",
     "dev": "concurrently -n api,web -c blue,magenta \"npm run dev -w backend\" \"npm run dev -w frontend\"",
     "dev:frontend": "npm run dev -w frontend",
     "dev:backend": "npm run dev -w backend",
@@ -18,8 +20,11 @@
     "test:audio": "tsc -p frontend/tsconfig.test.json && tsx --tsconfig frontend/tsconfig.test.json --test frontend/tests/audioStorage.test.ts frontend/tests/recordAudio.test.ts",
     "test:account": "tsc -p frontend/tsconfig.test.json && tsx --tsconfig frontend/tsconfig.test.json --test frontend/tests/account.test.ts",
     "test:legacy-api": "tsc -p backend/tsconfig.test.json && tsx --tsconfig backend/tsconfig.test.json --test backend/tests/legacyExamples.test.ts",
+    "test:cassettes": "tsc -p shared/tsconfig.test.json && tsx --tsconfig shared/tsconfig.test.json --test shared/tests/cassettes.test.ts",
+    "test:cassette-api": "tsc -p backend/tsconfig.test.json && tsx --tsconfig backend/tsconfig.test.json --test backend/tests/cassetteHttp.test.ts backend/tests/cassetteSecurity.test.ts backend/tests/cassetteRepository.test.ts",
+    "test:cassette-frontend": "tsc -p frontend/tsconfig.test.json && tsx --tsconfig frontend/tsconfig.test.json --test frontend/tests/cassetteClient.test.ts frontend/tests/cassetteStore.test.ts",
     "test:explore": "tsc -p backend/tsconfig.test.json && tsx --tsconfig backend/tsconfig.test.json --test backend/tests/explore.test.ts",
-    "sticker":"npm run sticker -w @runman/frontend --"
+    "sticker": "npm run sticker -w @runman/frontend --"
   },
   "devDependencies": {
     "@aws-amplify/backend": "^1.25.1",
