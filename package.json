@@ -12,10 +12,16 @@
     "dev:frontend": "npm run dev -w frontend",
     "dev:backend": "npm run dev -w backend",
     "build": "npm run build -w backend && npm run build -w frontend",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present && npm run typecheck:amplify",
+    "typecheck:amplify": "tsc -p amplify/tsconfig.json"
   },
   "devDependencies": {
+    "@aws-amplify/backend": "^1.25.1",
+    "@aws-amplify/backend-cli": "^1.10.0",
+    "@types/node": "^26.6.6",
+    "aws-cdk-lib": "^2.277.0",
     "concurrently": "^10.0.7",
+    "constructs": "^10.8.1",
     "typescript": "^5.9.3"
   }
 }

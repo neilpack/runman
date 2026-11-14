@@ -36,7 +36,7 @@ Built for **iHack 2026** (BYU-Idaho CSE Department Computing Society) — Theme:
 | Backend | AWS Amplify Gen 2 |
 | Database | Amazon DynamoDB |
 | File storage (recordings, uploads) | Amazon S3 |
-| Auth (optional) | Amazon Cognito |
+| Auth | Amazon Cognito (email/password, verification, recovery) |
 | Hosting | AWS Amplify Hosting |
 
 ---
@@ -45,7 +45,7 @@ Built for **iHack 2026** (BYU-Idaho CSE Department Computing Society) — Theme:
 
 Every team member needs:
 
-- [Node.js (LTS)](https://nodejs.org/)
+- [Node.js 24 LTS](https://nodejs.org/) (`.nvmrc` pins major 24)
 - [Git](https://git-scm.com/downloads)
 - [VS Code](https://code.visualstudio.com/) (recommended), with [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) and [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)
 - [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
@@ -87,19 +87,38 @@ See [Amplify Gen 2: Configure AWS for local development](https://docs.amplify.aw
 
 ### 3. Environment variables
 
-Create a `.env.local` file in the project root (do not commit it):
+Create `frontend/.env.local` (do not commit it):
 
 ```
 VITE_JAMENDO_CLIENT_ID=your_client_id_here
 ```
 
-### 4. Start a personal cloud sandbox
+### 4. Shared Amplify backend (provisioning is a later checkpoint)
+
+`amplify/` currently defines Cognito email/password authentication, with guest
+credentials disabled. No backend has been deployed or connected to the UI by this
+checkpoint. DynamoDB, S3, and their ownership rules are later tasks.
+
+The demo will use **one shared backend in `us-west-2`**, deployed from `main` through
+Amplify Hosting. Do not run a personal `ampx sandbox` or deploy the existing SAM
+template alongside it: both create cloud resources.
+
+After the shared deployment exists, obtain its generated frontend configuration
+from the repo root (replace the app ID; this reads deployment outputs):
 
 ```bash
-npx ampx sandbox
+npx ampx generate outputs --app-id <amplify-app-id> --branch main --out-dir frontend
 ```
 
-This deploys your own temporary backend (DynamoDB, S3, etc.) so you don't affect teammates.
+Use your team AWS profile with region `us-west-2`. Keep generated
+`amplify_outputs.json` and `.amplify/` out of Git; never put AWS credentials in
+frontend configuration. The next identity checkpoint will load these outputs and
+show a setup message when they are absent. Local scaffolding still runs without
+AWS access, but it does not simulate authenticated cloud access.
+
+The retained Express `/api/items` example is not authenticated and has no per-user
+ownership. Do not use it for private cassette data or publish the SAM example;
+restricting that example is a later checkpoint.
 
 ### 5. Run the app
 
@@ -109,17 +128,23 @@ npm run dev
 
 ---
 
-## Project Setup (already done — for reference)
+## Local checks
 
 ```bash
-npm create vite@latest runman -- --template react
-cd runman
-npm create amplify@latest
-npm install aws-amplify @aws-amplify/ui-react
-npm install @dnd-kit/core
-npm install konva react-konva
-npm install howler        # optional
+npm run typecheck             # all workspaces plus Amplify definitions
+npm run typecheck:amplify     # infrastructure definitions only; no AWS deployment
+npm run build                # retained Lambda bundle plus frontend
 ```
+
+Use Node.js **24 LTS** for development and CI. On the current Node 25.2.1 machine,
+the Amplify CLI smoke check fails in `@typescript/vfs` (`localStorage.getItem is not
+a function`), although typecheck/build pass; do not use Node 25 for deployment.
+The CLI still needs verification under Node 24 before cloud provisioning.
+A version-only check on Node 25 succeeded with process-local
+`NODE_OPTIONS=--no-experimental-webstorage`; this does not validate cloud deployment.
+`amplify/package.json` scopes ESM to the infrastructure directory without changing the existing root
+package's module behavior. Backend packages/CLI are root dev dependencies; frontend
+Amplify runtime/UI dependencies will be added with the identity UI checkpoint.
 
 ---
 

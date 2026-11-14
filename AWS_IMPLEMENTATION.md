@@ -13,7 +13,7 @@ By November 14, 2026, 4 PM, deploy an HTTPS demo where a verified user can creat
 - Defer sharing, social login, anonymous cloud saves, custom domain, and per-developer/preview backends.
 
 ## Starting point
-Read `AGENTS.md` first. The repo now has `frontend/` (React/Vite), `backend/` (Express/Lambda with SAM), and `shared/` (contracts). The README still describes Amplify setup that is not implemented. Reinspect before editing; other agents may have progressed.
+Read `AGENTS.md` first. The repo has `frontend/` (React/Vite), `backend/` (retained Express/Lambda/SAM examples), `shared/` (contracts), and `amplify/` (Cognito foundation). New cloud resources use Amplify; do not deploy duplicate SAM resources. Reinspect before editing; other agents may have progressed.
 
 ## Ordered tasks
 Check a task only after its completion check passes. Claim it below before editing shared files.
@@ -31,9 +31,9 @@ Keep changes within the claimed task; coordinate edits to shared contracts, conf
 
 Update this block when stopping so the next agent can continue:
 
-- **Completed:** planning only; no AWS implementation or deployment verified.
-- **Claimed task / agent:** none.
-- **Changed files:** this plan only.
-- **Checks and results:** planning-time `npm run typecheck` could not run: `tsc` missing in all workspaces. Install dependencies before implementation checks.
-- **Blockers:** none established; AWS/GitHub access not yet verified.
-- **Next action:** task 1, inventory current code and establish the Amplify migration path.
+- **Completed:** identity checkpoint 1 definitions added locally: Cognito email/password and guest credentials disabled. Identity task remains incomplete; no UI integration or AWS provisioning performed.
+- **Claimed task / agent:** checkpoint 1 implemented by backend-aws; awaiting review/user go-ahead.
+- **Changed files:** `amplify/`, `.nvmrc`, root package/lockfile and ignores, README, AGENTS.md, backend agent profile, this handoff.
+- **Checks and results:** dependency installation, `npm run typecheck` (workspaces + Amplify), `npm run build` (Lambda + frontend), and `git diff --check` passed. TypeScript remains 5.9.3. Audit reported 46 dependency advisories (4 moderate, 38 high, 4 critical), including Amplify CLI code-generation dependencies; some have no advertised fix. Review before cloud deployment; no broad automatic fixes applied.
+- **Blockers:** Amplify CLI fails by default on this machine's Node 25.2.1 (`localStorage.getItem` in `@typescript/vfs`). A process-local `NODE_OPTIONS=--no-experimental-webstorage` version check passed (`1.10.0`); Node 24 remains the project target and needs CLI verification before deployment. Live AWS access/email flows not yet verified. Existing `/api/items` is still public and must not be used for private data.
+- **Next action:** checkpoint 1 source review and local validation complete; wait for user approval before checkpoint 2 (identity UI/configuration). Later checkpoints restrict legacy example exposure and provision/test shared Cognito.

@@ -16,6 +16,7 @@ Humans: if you add a subagent or skill, document it in the tables below.
 | `frontend/` | React 19 + TypeScript + Vite + React Router. UI/UX pages.                  |
 | `backend/`  | Node + Express 5 API. Runs locally and on AWS Lambda (via `serverless-http`). |
 | `shared/`   | `@runman/shared`: TypeScript types shared by frontend and backend.        |
+| `amplify/`  | Amplify Gen 2 cloud definitions; Cognito identity foundation.             |
 | `.claude/`  | Claude Code subagents (`agents/`) and skills (`skills/`).                  |
 
 ## Commands
@@ -28,6 +29,14 @@ Run from the repo root.
 | `npm run dev`          | Backend on :4000 + frontend on :5173 together          |
 | `npm run typecheck`    | `tsc` across all workspaces. **Run before finishing a task.** |
 | `npm run build`        | Lambda bundle (`backend/dist/`) + frontend (`frontend/dist/`) |
+| `npm run typecheck:amplify` | Check Amplify definitions without deploying AWS resources |
+
+## AWS deployment boundary
+
+- New RunMan cloud resources belong in `amplify/` (Amplify Gen 2). Cognito owns email/password identity; do not add a duplicate pool to SAM.
+- Preserve `backend/` Express/SAM examples for local development. They have no user ownership enforcement and must not serve private cassette data. Their production restriction is a later checkpoint.
+- Region: `us-west-2`. Use one shared backend and generated outputs; do not start personal sandboxes or deploy SAM alongside it by default.
+- Do not deploy/create/delete AWS resources without the current checkpoint's authorization. Typechecking/building is local; running a sandbox creates cloud resources.
 
 ## Conventions
 
@@ -68,7 +77,7 @@ picks them automatically based on their `description`, or you can ask for one by
 | Agent          | File                              | Use it for                                                    |
 | -------------- | --------------------------------- | ------------------------------------------------------------- |
 | `frontend-ui`  | `.claude/agents/frontend-ui.md`   | Building/restyling React pages and components                 |
-| `backend-aws`  | `.claude/agents/backend-aws.md`   | API routes, services, DynamoDB/S3, SAM template changes       |
+| `backend-aws`  | `.claude/agents/backend-aws.md`   | Amplify infrastructure and retained Express API/services    |
 | `code-reviewer`| `.claude/agents/code-reviewer.md` | Read-only review of a change before you push/merge            |
 
 **Adding a subagent:** create `.claude/agents/<name>.md`, keep the `description` specific
