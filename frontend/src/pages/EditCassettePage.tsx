@@ -3,12 +3,15 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import type { Cassette, SideLook, Sticker, StickerKind, TapeSide } from '@runman/shared';
+import type { Cassette, CustomSticker, CustomStickerStroke, SideLook, Sticker, StickerKind, TapeSide } from '@runman/shared';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Cassette3D } from '@/components/cassette/Cassette3D';
 import { CassetteFace } from '@/components/cassette/CassetteFace';
 import { ColorPicker } from '@/components/cassette/ColorPicker';
+import { CustomStickerArt } from '@/components/cassette/CustomStickerArt';
+import { CUSTOM_SLOT_COUNT, customKind, findCustomSticker } from '@/components/cassette/customStickers';
 import { FlippableFace } from '@/components/cassette/FlippableFace';
+import { StickerDrawDialog } from '@/components/cassette/StickerDrawDialog';
 import { StickerIcon } from '@/components/cassette/StickerIcon';
 import { TrackList } from '@/components/cassette/TrackList';
 import { VisibilitySwitch } from '@/components/cassette/VisibilitySwitch';
@@ -181,6 +184,79 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: (cassetteSav
 
   const selected = look.stickers.find((s) => s.id === selectedId);
 
+  // ---- Custom (hand-drawn) stickers: 5 slots shared by both sides ----
+  const customs = cassette.customStickers ?? [];
+  const [drawing, setDrawing] = useState<{ slot: number; art: CustomSticker | null } | null>(null);
+  const [slotMenu, setSlotMenu] = useState<number | null>(null);
+  const [removingCustom, setRemovingCustom] = useState<CustomSticker | null>(null);
+  const closeDrawing = useCallback(() => setDrawing(null), []);
+  const cancelRemoveCustom = useCallback(() => setRemovingCustom(null), []);
+
+  const openDrawing = (slot: number, art: CustomSticker | null) => {
+    setSlotMenu(null);
+    setSelectedId(null);
+    setDrawing({ slot, art });
+  };
+
+  /** How many times a drawing is stuck on the tape, across both sides. */
+  const timesPlaced = (art: CustomSticker) => {
+    const kind = customKind(art.id);
+    return [...cassette.stickers, ...(cassette.sideB?.stickers ?? [])].filter((s) => s.kind === kind).length;
+  };
+
+  const saveDrawing = (strokes: CustomStickerStroke[]) => {
+    const target = drawing;
+    setDrawing(null);
+    if (!target || !currentContext()) return;
+    cassetteStore.update(cassette.id, (c) => {
+      const list = c.customStickers ?? [];
+      const id = target.art?.id;
+      if (id && list.some((a) => a.id === id)) {
+        // Editing: every copy already on the tape picks up the new drawing.
+        return { customStickers: list.map((a) => (a.id === id ? { ...a, strokes } : a)) };
+      }
+      if (list.some((a) => a.slot === target.slot)) return {};
+      const next = [...list, { id: id ?? newId(), slot: target.slot, strokes }];
+      return { customStickers: next.sort((a, b) => a.slot - b.slot) };
+    });
+  };
+
+  const removeCustom = (art: CustomSticker) => {
+    setRemovingCustom(null);
+    setSelectedId(null);
+    if (!currentContext()) return;
+    const kind = customKind(art.id);
+    // Peel off every placed copy too, so neither side points at a missing drawing.
+    cassetteStore.update(cassette.id, (c) => ({
+      customStickers: (c.customStickers ?? []).filter((a) => a.id !== art.id),
+      stickers: c.stickers.filter((s) => s.kind !== kind),
+      ...(c.sideB?.stickers ? { sideB: { ...c.sideB, stickers: c.sideB.stickers.filter((s) => s.kind !== kind) } } : {}),
+    }));
+  };
+
+  const requestRemoveCustom = (art: CustomSticker) => {
+    setSlotMenu(null);
+    if (timesPlaced(art)) setRemovingCustom(art);
+    else removeCustom(art);
+  };
+
+  // The slot menu closes on any press outside its slot, or on Escape.
+  useEffect(() => {
+    if (slotMenu === null) return;
+    const onDown = (e: PointerEvent) => {
+      if (!(e.target instanceof Element && e.target.closest('.custom-slot-wrap.open'))) setSlotMenu(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSlotMenu(null);
+    };
+    document.addEventListener('pointerdown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [slotMenu]);
+
   const switchSide = (next: TapeSide) => {
     setSide(next);
     setSelectedId(null);
@@ -227,7 +303,10 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: (cassetteSav
     const d = trayDrag.current;
     if (!d || d.pointerId !== e.pointerId) return;
     if (!d.dragging && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < 6) return;
-    if (!d.dragging) document.documentElement.classList.add('dragging-sticker');
+    if (!d.dragging) {
+      document.documentElement.classList.add('dragging-sticker');
+      setSlotMenu(null);
+    }
     d.dragging = true;
     setGhost({ kind: d.kind, x: e.clientX, y: e.clientY, over: overFace(e.clientX, e.clientY) });
   };
@@ -509,6 +588,91 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: (cassetteSav
                   />
                 ))}
               </div>
+
+              {/* ---- Your own drawings ---- */}
+              <div className="custom-stickers">
+                <div className="custom-stickers-head">
+                  <span className="field-label">Custom stickers</span>
+                  <span className="studio-muted">
+                    {customs.length ? `Click to edit · drag onto side ${side}` : 'Press + to draw your own'}
+                  </span>
+                </div>
+                <div className="sticker-tray custom-tray">
+                  {Array.from({ length: CUSTOM_SLOT_COUNT }, (_, slot) => {
+                    const art = customs.find((a) => a.slot === slot);
+                    if (!art) {
+                      return (
+                        <button
+                          key={slot}
+                          type="button"
+                          className="sticker-btn custom-slot empty"
+                          aria-label={`Draw custom sticker ${slot + 1}`}
+                          title="Draw a sticker"
+                          onClick={() => openDrawing(slot, null)}
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 5v14M5 12h14" />
+                          </svg>
+                        </button>
+                      );
+                    }
+                    const kind = customKind(art.id);
+                    const open = slotMenu === slot;
+                    const align = slot === 0 ? ' align-start' : slot === CUSTOM_SLOT_COUNT - 1 ? ' align-end' : '';
+                    return (
+                      <div key={slot} className={`custom-slot-wrap${open ? ' open' : ''}`}>
+                        <button
+                          type="button"
+                          className="sticker-btn custom-slot"
+                          aria-haspopup="menu"
+                          aria-expanded={open}
+                          aria-label={`Custom sticker ${slot + 1}: options, or drag onto side ${side}`}
+                          title="Click to edit or remove · drag onto the tape"
+                          onClick={() => {
+                            if (suppressTrayClick.current) return;
+                            setSlotMenu(open ? null : slot);
+                          }}
+                          onPointerDown={(e) => onTrayDown(e, kind)}
+                          onPointerMove={onTrayMove}
+                          onPointerUp={(e) => endTrayDrag(e, true)}
+                          onPointerCancel={(e) => endTrayDrag(e, false)}
+                        >
+                          <CustomStickerArt art={art} />
+                        </button>
+                        {open && (
+                          <div className={`slot-menu${align}`} role="menu" aria-label={`Custom sticker ${slot + 1}`}>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                setSlotMenu(null);
+                                addSticker(kind);
+                              }}
+                            >
+                              <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 5v14M5 12h14" />
+                              </svg>
+                              Stick on side {side}
+                            </button>
+                            <button type="button" role="menuitem" onClick={() => openDrawing(slot, art)}>
+                              <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M4 20l1-5L16 4l4 4L9 19zM14 6l4 4" />
+                              </svg>
+                              Edit drawing
+                            </button>
+                            <button type="button" role="menuitem" className="danger" onClick={() => requestRemoveCustom(art)}>
+                              <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" />
+                              </svg>
+                              Remove
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -618,9 +782,35 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: (cassetteSav
           style={{ left: ghost.x, top: ghost.y, width: ghostSize, height: ghostSize }}
           aria-hidden="true"
         >
-          <StickerIcon kind={ghost.kind} color={stickerColor} />
+          <StickerIcon kind={ghost.kind} color={stickerColor} art={findCustomSticker(customs, ghost.kind)} />
         </div>
       )}
+
+      {drawing && <StickerDrawDialog art={drawing.art} onSave={saveDrawing} onCancel={closeDrawing} />}
+
+      <ConfirmDialog
+        open={removingCustom !== null}
+        danger
+        title="Peel off this sticker?"
+        message={
+          removingCustom && (
+            <>
+              It's stuck on this tape {timesPlaced(removingCustom) === 1 ? 'once' : `${timesPlaced(removingCustom)} times`}.
+              Removing the drawing peels those copies off too.
+            </>
+          )
+        }
+        confirmLabel="Remove sticker"
+        cancelLabel="Keep it"
+        onConfirm={() => removingCustom && removeCustom(removingCustom)}
+        onCancel={cancelRemoveCustom}
+      >
+        {removingCustom && (
+          <div className="custom-remove-visual">
+            <CustomStickerArt art={removingCustom} />
+          </div>
+        )}
+      </ConfirmDialog>
 
       <ConfirmDialog
         open={confirmingDelete}
