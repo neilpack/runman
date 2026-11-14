@@ -2,6 +2,8 @@
 
 import { createBrowserRouter } from 'react-router';
 import { Layout } from './components/Layout';
+import { WelcomePage } from './pages/WelcomePage';
+import { LoginPage } from './pages/LoginPage';
 import { HomePage } from './pages/HomePage';
 import { LibraryPage } from './pages/LibraryPage';
 import { EditCassettePage } from './pages/EditCassettePage';
@@ -10,10 +12,13 @@ import { AboutPage } from './pages/AboutPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
 export const router = createBrowserRouter([
+  // Signed-out screens render full-bleed, outside the app Layout.
+  { path: '/', element: <WelcomePage /> },
+  { path: '/login', element: <LoginPage /> },
   {
     element: <Layout />,
     children: [
-      { path: '/', element: <LibraryPage /> },
+      { path: '/library', element: <LibraryPage /> },
       { path: '/cassettes/:id/edit', element: <EditCassettePage /> },
       { path: '/status', element: <HomePage /> },
       { path: '/dashboard', element: <DashboardPage /> },

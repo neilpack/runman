@@ -36,7 +36,7 @@ export function EditCassettePage() {
         <div className="editor-missing">
           <h1>Tape not found</h1>
           <p className="studio-muted">It may have been deleted.</p>
-          <Link to="/" className="studio-btn primary">
+          <Link to="/library" className="studio-btn primary">
             Back to library
           </Link>
         </div>
@@ -44,7 +44,7 @@ export function EditCassettePage() {
     );
   }
 
-  return <Editor cassette={cassette} onDone={() => navigate('/')} />;
+  return <Editor cassette={cassette} onDone={() => navigate('/library')} />;
 }
 
 function Swatches({
@@ -209,7 +209,7 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
   return (
     <div className="studio editor">
       <div className="editor-top">
-        <Link to="/" className="studio-btn">
+        <Link to="/library" className="studio-btn">
           ← Library
         </Link>
         <span className="studio-muted editor-saved">Changes save automatically</span>
