@@ -18,6 +18,7 @@ import { CassetteCloudPanel } from '@/components/cassette/CassetteCloudPanel';
 import { useSession } from '@/hooks/useSession';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { deckProgress, useDeck } from '@/components/deck/DeckProvider';
+import { DeckRecorder } from '@/components/deck/DeckRecorder';
 import { playSfx } from '@/audio/sfx';
 import { PlaybackDiagnostics } from '@/components/PlaybackDiagnostics';
 import './library.css';
@@ -99,7 +100,7 @@ function LibraryStudio() {
   const [drawerOpen, setDrawerOpen] = useState(() => window.innerWidth > 760);
   const [activeId, setActiveId] = useState<string | null>(null);
   // The deck is app-wide (DeckProvider in Layout): its tape keeps playing on other pages.
-  const { loaded, loadedId, setLoadedId, side, setSide, deck, control } = useDeck();
+  const { loaded, loadedId, setLoadedId, side, setSide, deck, control, recordingTarget, closeRecorder, recordingStopped } = useDeck();
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [rot, setRot] = useState(REST_ROTATION);
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
@@ -385,6 +386,7 @@ function LibraryStudio() {
         </p>
 
         <div className="stage-grid">
+          <div className="library-player-row">
           <CassettePlayer
             loaded={loaded}
             side={side}
@@ -397,6 +399,8 @@ function LibraryStudio() {
             display={deck.display}
             progress={deckProgress(deck)}
           />
+          {recordingTarget && <DeckRecorder inline target={recordingTarget} onClose={closeRecorder} onRecordingStopped={recordingStopped} />}
+          </div>
           <div ref={pedestalRef} className={`pedestal${active ? ' occupied' : ''}`}>
             <span className="pedestal-ring" />
           </div>

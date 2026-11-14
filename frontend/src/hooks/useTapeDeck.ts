@@ -299,6 +299,9 @@ export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): Tap
     }
     if (control === 'record') {
       halt();
+      const current = tracksRef.current[indexRef.current];
+      setLatched(['record']);
+      setNotice(`RECORDING · ${current?.title ?? 'NEW TRACK'}`);
       return;
     }
     if (control === 'stop') {

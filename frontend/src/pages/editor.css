@@ -892,6 +892,29 @@
   color: #fda4af;
 }
 
+.picker .recording-name-field {
+  color: var(--studio-text);
+}
+
+.picker .recording-name-field .input {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: #0f0f11;
+  color: var(--studio-text);
+}
+
+.picker .recording-name-field .input::placeholder {
+  color: var(--studio-muted);
+}
+
+.picker .recording-name-field .input:focus {
+  outline: 2px solid #ff7a1a;
+  outline-offset: 1px;
+}
+
+.picker .audio-input [role='status'] {
+  color: #ffd7b5;
+}
+
 .picker .audio-file-picker {
   min-height: 84px;
   border-color: rgba(255, 122, 26, 0.7);
