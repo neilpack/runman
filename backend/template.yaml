@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: runman backend — API Gateway (HTTP API) + Lambda + DynamoDB + S3
+
+# Deploy with the AWS SAM CLI from the backend/ folder:
+#   npm run sam:build
+#   npm run sam:deploy      (first time: guided; saves samconfig.toml)
+
+Parameters:
+  FrontendOrigin:
+    Type: String
+    Default: http://localhost:5173
+    Description: Allowed CORS origin for the frontend
+
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    Timeout: 15
+    MemorySize: 512
+    Architectures: [arm64]
+
+Resources:
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: dist/
+      Handler: lambda.handler
+      Environment:
+        Variables:
+          ITEMS_TABLE: !Ref ItemsTable
+          UPLOADS_BUCKET: !Ref UploadsBucket
+          CORS_ORIGINS: !Ref FrontendOrigin
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ItemsTable
+        - S3CrudPolicy:
+            BucketName: !Ref UploadsBucket
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+
+  ItemsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+
+  UploadsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins: [!Ref FrontendOrigin]
+            AllowedMethods: [GET, PUT]
+            AllowedHeaders: ['*']
+
+Outputs:
+  ApiUrl:
+    Description: Base URL of the deployed API (set as VITE_API_URL in the frontend)
+    Value: !Sub https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com
+  ItemsTableName:
+    Value: !Ref ItemsTable
+  UploadsBucketName:
+    Value: !Ref UploadsBucket

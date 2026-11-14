@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+.aws-sam/
+cdk.out/
+.amplify/
+amplify_outputs.json
+
+# Env / secrets — commit only the .env.example files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Claude Code personal settings (shared settings in .claude/settings.json are committed)
+.claude/settings.local.json
+
+# Notes and specific Prompts that should be ignored
+ignored/
