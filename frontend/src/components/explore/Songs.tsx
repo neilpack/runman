@@ -46,7 +46,7 @@ export function SongArt({ song, size }: { song: PublicSong; size: number }) {
       type="button"
       className={`ex-art ex-art-play is-${status}`}
       style={style}
-      onClick={() => previewPlayer.toggle(song.id, api.publicSongAudioUrl(song.id))}
+      onClick={() => previewPlayer.toggle(song.id, api.publicSongAudioUrl(song.id), song)}
       aria-label={label}
       aria-pressed={playing}
       title={status === 'error' ? 'Preview unavailable' : undefined}
@@ -72,7 +72,8 @@ export function SongRow({ song, onAdd, showUploader = true }: SongProps & { show
         <strong>{song.title}</strong>
         <small>
           {song.artist}
-          {showUploader && (
+          {song.provider === 'jamendo' && ' · Jamendo'}
+          {showUploader && song.provider !== 'jamendo' && (
             <>
               {' · '}
               <Link to={listenerPath(song.uploader.username)} className="ex-uploader">
@@ -81,6 +82,7 @@ export function SongRow({ song, onAdd, showUploader = true }: SongProps & { show
             </>
           )}
         </small>
+        <small>{plural(song.playCount ?? 0, 'play')}{(song.listenedMs ?? 0) >= 60_000 && ` · ${Math.floor(song.listenedMs! / 60_000)} min listened`}</small>
       </span>
       <span className="ex-song-time">{formatTime(song.durationSec)}</span>
       <button
@@ -117,12 +119,12 @@ export function TrendingSongs({ songs, onAdd }: { songs: PublicSong[]; onAdd: So
           <span className="ex-trend-meta">
             <strong title={song.title}>{song.title}</strong>
             <small>{song.artist}</small>
-            <Link to={listenerPath(song.uploader.username)} className="ex-uploader">
+            {song.provider === 'jamendo' ? <small>Jamendo</small> : <Link to={listenerPath(song.uploader.username)} className="ex-uploader">
               @{song.uploader.username}
-            </Link>
+            </Link>}
           </span>
           <span className="ex-trend-foot">
-            <small className="muted">{plural(song.addCount, 'add')}</small>
+            <small className="muted">{plural(song.playCount ?? 0, 'play')}</small>
             <button
               type="button"
               className="btn btn-secondary ex-add"

@@ -2,6 +2,8 @@
 
 import { useSyncExternalStore } from 'react';
 import { registerAudio, takeAudioFocus } from '@/audio/audioFocus';
+import { watchListening } from '@/audio/listeningRuntime';
+import type { PublicSong, Track } from '@runman/shared';
 
 export type PreviewStatus = 'idle' | 'loading' | 'playing' | 'error';
 
@@ -11,6 +13,7 @@ interface PreviewState {
 }
 
 let audio: HTMLAudioElement | null = null;
+let listeningTrack: Track | undefined;
 let state: PreviewState = { songId: null, status: 'idle' };
 const listeners = new Set<() => void>();
 
@@ -31,18 +34,20 @@ function element(): HTMLAudioElement {
     if (state.songId && a.getAttribute('src')) set({ songId: state.songId, status: 'error' });
   });
   audio = a;
+  watchListening(a, () => listeningTrack);
   return a;
 }
 
 export const previewPlayer = {
   /** Play `songId`, or pause it if it is the one already playing. */
-  toggle(songId: string, url: string) {
+  toggle(songId: string, url: string, song?: PublicSong) {
     const a = element();
     if (state.songId === songId && (state.status === 'playing' || state.status === 'loading')) {
       previewPlayer.stop();
       return;
     }
     takeAudioFocus('explore-preview'); // Pauses the Walkman if a tape is playing.
+    listeningTrack = song ? { id: song.id, source: song.provider === 'jamendo' ? 'library' : 'community', sourceId: song.sourceId ?? song.id, title: song.title, artist: song.artist, durationSec: song.durationSec, side: 'A' } : undefined;
     a.src = url;
     set({ songId, status: 'loading' });
     a.play().catch((error: unknown) => {
@@ -51,6 +56,7 @@ export const previewPlayer = {
     });
   },
   stop() {
+    listeningTrack = undefined;
     if (audio) {
       audio.pause();
       audio.removeAttribute('src');

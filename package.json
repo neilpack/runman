@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "test:media": "tsc -p shared/tsconfig.test.json && tsx --tsconfig shared/tsconfig.test.json --test shared/tests/media.test.ts",
+    "test:discover": "tsc -p backend/tsconfig.test.json && tsc -p frontend/tsconfig.test.json && tsx --tsconfig backend/tsconfig.test.json --test backend/tests/listening.test.ts && tsx --tsconfig frontend/tsconfig.test.json --test frontend/tests/discoverListening.test.ts",
     "test:media-api": "tsc -p backend/tsconfig.test.json && tsx --tsconfig backend/tsconfig.test.json --test backend/tests/mediaService.test.ts backend/tests/mediaRepository.test.ts backend/tests/mediaHttp.test.ts backend/tests/privateMediaStorage.test.ts",
     "package:backend": "npm run build -w backend && node scripts/package-backend.mjs",
     "test:deployment": "node --test scripts/tests/package-backend.test.mjs",

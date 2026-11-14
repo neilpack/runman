@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { once } from 'node:events';
 import { test, type TestContext } from 'node:test';
-import { DeleteCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DeleteCommand, GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { mediaObjectKey, type CassettePayload, type ListenerProfileResponse, type PublicSongPage, type PublicTapePage, type PublicTapeResponse, type StoredAudioReference } from '@runman/shared';
 import { createApp } from '../src/app.js';
 import { readConfig } from '../src/config.js';
@@ -11,6 +11,7 @@ import { HttpError } from '../src/middleware/errorHandler.js';
 import { CATALOG_PARTITIONS, createDynamoPublicCatalogRepository, type CatalogDynamoCommand, type CatalogDynamoResult } from '../src/aws/dynamoPublicCatalog.js';
 import { CatalogConflict, UsernameTaken } from '../src/services/publicCatalogRepository.js';
 import { publicSongId } from '../src/services/publishService.js';
+import { createMemoryCassetteRepository } from '../src/services/cassetteRepository.js';
 
 const poolId = 'us-west-2_Offline123';
 const clientId = 'offlinepublicclient';
@@ -49,20 +50,21 @@ async function server(t: TestContext) {
       return { url: 'https://s3.us-west-2.amazonaws.com/private-bucket/signed', expiresAt: now };
     },
   };
-  const listener = createApp({ exploreApi: { settings, verifier, media, clock: () => now } }).listen(0);
+  const cassettes = createMemoryCassetteRepository();
+  const listener = createApp({ cassetteApi: { settings, verifier, repository: cassettes, authorizeAudio: media.authorize }, exploreApi: { settings, verifier, media, clock: () => now } }).listen(0);
   await once(listener, 'listening');
   t.after(() => listener.close());
   const address = listener.address();
   assert.ok(address && typeof address === 'object');
   const call = async (method: string, path: string, body?: unknown, sub: string | null = alice) => {
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/explore${path}`, {
+    const response = await fetch(`http://127.0.0.1:${address.port}${path.startsWith('/api/') ? path : `/api/explore${path}`}`, {
       method, redirect: 'manual', headers: { 'Content-Type': 'application/json', ...(sub ? { Authorization: `Bearer ${token(sub)}` } : {}) },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
     const text = await response.text();
     return { status: response.status, location: response.headers.get('location'), body: (text && response.headers.get('content-type')?.includes('json') ? JSON.parse(text) : null) as Record<string, any> };
   };
-  return { call, plays };
+  return { call, plays, cassettes };
 }
 
 const profile = (username: string) => ({ username, avatar: null, favoriteTape: null });
@@ -185,6 +187,44 @@ test('adds count once per listener and need a sign-in', async (t) => {
   assert.equal((await call('POST', '/songs/missing/adds')).status, 404);
 });
 
+test('saved uploads and recordings survive owner withdrawal, while Discover and new listeners lose access', async (t) => {
+  const { call, cassettes } = await server(t);
+  const charlie = '33333333-3333-4333-8333-333333333333';
+  const legacy = '44444444-4444-4444-8444-444444444444';
+  await call('PUT', '/mine/profile', profile('alice'));
+  const base: CassettePayload = { id: 'original', name: 'Original', shellColor: '#123456', labelColor: '#ffffff', inkColor: '#000000', shellType: 'solid', penStyle: 'marker', stickers: [], tracks: [] };
+  const tracks = (['upload', 'recording'] as const).map((source, index) => ({ id: source, source, provider: 's3' as const, audio: { ...audio(alice, 20 + index), source }, title: source, artist: 'Alice', durationSec: 10, side: 'A' as const }));
+  const published = await call('PUT', '/mine/tapes/original', { cassette: { ...base, tracks } });
+  assert.equal(published.status, 200);
+  const publicTracks = (published.body.tape as PublicTapeResponse['tape']).tape.tracks;
+  const saved = { ...base, id: 'borrowed', tracks: publicTracks };
+  await cassettes.save(legacy, { cassette: saved, expectedRevision: 0 }, now);
+  const save = (sub: string, expectedRevision: number) => call('PUT', '/api/cassettes/borrowed', { cassette: saved, expectedRevision }, sub);
+  assert.equal((await save(bob, 0)).status, 201, 'server save establishes access to both audio sources');
+  assert.equal((await call('DELETE', '/mine/tapes/original')).status, 200);
+  for (const track of publicTracks) {
+    assert.equal(track.provider, 'explore');
+    if (track.provider !== 'explore') continue;
+    const id = track.sourceId;
+    assert.equal((await call('GET', `/songs/${id}/audio`, undefined, null)).status, 404);
+    assert.equal((await call('POST', `/songs/${id}/playback`, undefined, bob)).status, 200, 'prior recipient keeps playback');
+    assert.equal((await call('POST', `/songs/${id}/playback?cassetteId=borrowed`, undefined, legacy)).status, 200, 'pre-feature saved tape still plays without an add marker');
+    assert.equal((await call('POST', `/songs/${id}/playback?cassetteId=borrowed`, undefined, charlie)).status, 404, 'another account cannot borrow the saved-tape proof');
+    assert.equal((await call('POST', `/songs/${id}/playback`)).status, 200, 'original owner keeps playback');
+    assert.equal((await call('POST', `/songs/${id}/playback`, undefined, charlie)).status, 404);
+    assert.equal((await call('POST', `/songs/${id}/playback`, undefined, null)).status, 401);
+    assert.equal((await call('POST', `/songs/${id}/adds`, undefined, charlie)).status, 404, 'cannot claim hidden audio');
+    assert.equal((await call('POST', '/plays/start', { playId: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000099', song: { provider: 'explore', id } }, charlie)).body.eligible, false);
+    const playId = `aaaaaaaa-aaaa-4aaa-8aaa-${String(publicTracks.indexOf(track)).padStart(12, '0')}`;
+    assert.equal((await call('POST', '/plays/start', { playId, song: { provider: 'explore', id } }, bob)).body.eligible, true, 'retained recipients still contribute listening totals');
+  }
+  assert.equal((await save(bob, 1)).status, 200, 'recipient can reload and keep saving their tape');
+  assert.equal((await save(legacy, 1)).status, 200, 'legacy saved references remain editable');
+  assert.equal((await save(charlie, 0)).status, 404, 'forging a saved reference cannot grant hidden audio');
+  assert.equal(((await call('GET', '/songs', undefined, null)).body as PublicSongPage).songs.some((song) => publicTracks.some((track) => track.provider === 'explore' && track.sourceId === song.id)), false);
+  assert.equal(((await call('GET', '/songs/trending', undefined, null)).body.songs as { id: string }[]).some((song) => publicTracks.some((track) => track.provider === 'explore' && track.sourceId === song.id)), false);
+});
+
 test('Dynamo catalog uses fixed-partition Queries, owner conditions and transactions; never Scan', async () => {
   const commands: CatalogDynamoCommand[] = [];
   const outputs: (CatalogDynamoResult | Error)[] = [];
@@ -229,5 +269,14 @@ test('Dynamo catalog uses fixed-partition Queries, owner conditions and transact
   outputs.push(cancelled('None', 'ConditionalCheckFailed'));
   assert.equal(await repository.recordAdd('missing', bob), undefined);
   assert.deepEqual((commands[0] as TransactWriteCommand).input.TransactItems?.[0].Put?.Item, { PK: 'EXPLORE#ADD#missing', SK: bob });
+  assert.match((commands[0] as TransactWriteCommand).input.TransactItems![1].Update!.ConditionExpression!, /#listed = :true/, 'a withdrawal race must prevent new grants');
   assert.ok(!commands.some((c) => c instanceof PutCommand && c.input.Item?.PK === 'EXPLORE#SONG'));
+
+  commands.length = 0;
+  const hidden = { id: 'retained', ownerId: alice, uploaderUsername: 'alice', title: 'Retained', artist: 'Alice', durationSec: 10, audio: audio(alice, 1), listed: false, addCount: 1, publishedAt: now, updatedAt: now };
+  outputs.push(cancelled('ConditionalCheckFailed', 'ConditionalCheckFailed'), { Item: { PK: 'EXPLORE#ADD#retained', SK: bob } }, { Item: { PK: CATALOG_PARTITIONS.song, SK: 'retained', ...hidden } });
+  assert.equal(await repository.recordAdd('retained', bob), 1, 'an existing grant still works after withdrawal without increasing adds');
+  assert.ok(commands[1] instanceof GetCommand);
+  assert.equal((commands[1] as GetCommand).input.ConsistentRead, true);
+  assert.deepEqual((commands[1] as GetCommand).input.Key, { PK: 'EXPLORE#ADD#retained', SK: bob });
 });

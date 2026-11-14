@@ -81,17 +81,17 @@ test('search matches every word across title, artist and uploader, ranking title
   assert.equal(searchSongs(songs, '', name).length, 4);
 });
 
-test('trending returns five songs, favoring recent adds over old popularity', () => {
+test('trending returns five songs by global plays instead of adds or release age', () => {
   const daysAgo = (d: number) => new Date(NOW.getTime() - d * 86_400_000).toISOString();
   const songs = [
-    song({ id: 'old-hit', addCount: 100, publishedAt: daysAgo(120) }),
-    song({ id: 'fresh', addCount: 20, publishedAt: daysAgo(1) }),
+    song({ id: 'old-hit', playCount: 100, addCount: 1, publishedAt: daysAgo(120) }),
+    song({ id: 'fresh', playCount: 20, addCount: 2000, publishedAt: daysAgo(1) }),
     ...['n1', 'n2', 'n3', 'n4', 'n5'].map((id, i) => song({ id, addCount: 0, publishedAt: daysAgo(i) })),
   ];
   const top = trendingSongs(songs, NOW);
   assert.equal(top.length, 5);
-  assert.equal(top[0].id, 'fresh');
-  assert.ok(top.findIndex((s) => s.id === 'fresh') < top.findIndex((s) => s.id === 'old-hit'));
+  assert.equal(top[0].id, 'old-hit');
+  assert.ok(top.findIndex((s) => s.id === 'old-hit') < top.findIndex((s) => s.id === 'fresh'));
 });
 
 test('S3 source caches listings, skips bad manifests and never caches failures', async () => {

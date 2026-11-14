@@ -168,3 +168,16 @@ export async function searchJamendoTracks(
     limit,
   };
 }
+
+/** Resolve authoritative public metadata by provider ID for listening/discovery. */
+export async function getJamendoTrack(id: string): Promise<MusicTrack | undefined> {
+  if (!/^[1-9]\d{0,19}$/.test(id) || !config.jamendo.clientId) return;
+  const url = new URL(`${config.jamendo.apiUrl}/tracks/`);
+  for (const [key, value] of Object.entries({ client_id: config.jamendo.clientId, format: 'json', id, audioformat: 'mp32', imagesize: '300', include: 'lyrics musicinfo' })) url.searchParams.set(key, value);
+  url.searchParams.set('type', 'single albumtrack');
+  const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  const body = await response.json() as JamendoResponse;
+  if (!response.ok || body.headers?.code !== 0) throw new JamendoError('Jamendo track lookup failed.');
+  const row = body.results?.find((track) => String(track.id) === id && isFamilyFriendlyTrack(track));
+  return row ? toMusicTrack(row) : undefined;
+}
