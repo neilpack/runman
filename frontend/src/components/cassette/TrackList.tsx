@@ -1,6 +1,7 @@
 // Side A / Side B tracklist for a cassette, plus the (stubbed) song library picker.
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Cassette, TapeSide, Track } from '@runman/shared';
 import { songLibrary, type SongResult } from '@/api/songLibrary';
 import { newId } from '@/hooks/useCassettes';
@@ -215,8 +216,19 @@ function SongPicker({ side, onAdd, onClose }: { side: TapeSide; onAdd: (s: SongR
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  return (
-    <div className="picker-backdrop" onClick={onClose}>
+  // Keep the page behind the picker from scrolling while it's open.
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, []);
+
+  // Rendered into <body> so it covers the whole page: inside the (tilted, scrolling) tracklist
+  // pane a fixed overlay would be trapped in that pane's box. `studio-vars` carries the theme.
+  return createPortal(
+    <div className="picker-backdrop studio-vars" onClick={onClose}>
       <div className="picker" role="dialog" aria-label="Song library" onClick={(e) => e.stopPropagation()}>
         <header className="panel-head">
           <h2>{query ? `Search results · Side ${side}` : `Recommended songs · Side ${side}`}</h2>
@@ -273,6 +285,7 @@ function SongPicker({ side, onAdd, onClose }: { side: TapeSide; onAdd: (s: SongR
           </ul>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
