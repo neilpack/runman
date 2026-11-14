@@ -31,6 +31,7 @@ import { cassetteStore, newId, useCassette, useCassetteSync } from '@/hooks/useC
 import { CassetteSaveControls } from '@/components/cassette/CassetteSaveControls';
 import { createEditorSaver } from '@/cassettes/editorSaver';
 import { useOrbit } from '@/hooks/useOrbit';
+import { useAccount } from '@/hooks/useAccount';
 import type { LibraryLocationState } from './LibraryPage';
 import './editor.css';
 
@@ -131,6 +132,7 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: (cassetteSav
   };
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [side, setSide] = useState<TapeSide>('A');
+  const account = useAccount();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const cancelDelete = useCallback(() => setConfirmingDelete(false), []);
   const [stickerColor, setStickerColor] = useState(STICKER_COLORS[0]);
@@ -690,10 +692,14 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: (cassetteSav
               />
               <p className="settings-note studio-muted">
                 {visibilityOf(cassette) === 'public'
-                  ? 'Anyone can view this tape and add it to their library'
-                  : 'Only you can see this tape'}{' '}
-                {/* Your uploaded songs stay private unless you make them public from the ⋮⋮ menu in the tracklist. */}
+                  ? 'Anyone can find this whole tape on Explore, play every song on it (your uploads and recordings too) and add it to their library. Shared when you leave the editor.'
+                  : 'Only you can see this tape and the songs on it.'}
               </p>
+              {visibilityOf(cassette) === 'public' && account.status === 'ready' && !account.profile?.hasUsername && (
+                <p className="settings-note" role="note">
+                  Pick a username on your <Link to="/account">Account page</Link> first, or this tape won't appear on Explore.
+                </p>
+              )}
             </div>
           </div>
         </section>

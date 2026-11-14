@@ -816,3 +816,52 @@
     animation: none;
   }
 }
+
+/* Public tapes */
+.ex-tape-card {
+  gap: var(--space-2);
+}
+
+.ex-tape-side {
+  margin: var(--space-3) 0 var(--space-2);
+  font-size: 0.9rem;
+  color: var(--color-muted);
+}
+
+.ex-tape-tracks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ex-tape-track {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.ex-tape-play {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.ex-tape-track-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ex-tape-track-name strong,
+.ex-tape-track-name small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

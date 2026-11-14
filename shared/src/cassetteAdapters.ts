@@ -1,6 +1,7 @@
 import type { Cassette, StoredAudioReference, Track } from './index.js';
 import type { CassetteAudioReferences, CassetteDocument, CassettePayload, CassetteValidationIssue, CassetteValidationResult, PersistedCassetteTrack, RestoreCassetteOptions, RestoredCassette, SaveCassetteRequest } from './cassettePersistence.js';
 import { validateCassetteDocument, validateSaveCassetteRequest } from './cassetteValidation.js';
+import type { PublicTapePayload } from './explorePublishing.js';
 
 function defined<T extends object>(value: T): T {
   return Object.fromEntries(Object.entries(value).filter(([, field]) => field !== undefined)) as T;
@@ -76,4 +77,21 @@ export function cassetteFromDocument(document: CassetteDocument, options: Restor
   });
   const { tracks: _tracks, ...look }: CassettePayload = payload;
   return { ok: true, value: { cassette: { ...look, tracks, createdAt, updatedAt }, audioReferences: references } };
+}
+
+/**
+ * A copy of someone's public tape for your own library: the full look plus every track. Jamendo
+ * tracks stay library tracks; Explore tracks (including the owner's uploads) stay playable through
+ * their stable song URL. The caller picks the new cassette's id and timestamps.
+ */
+export function cassetteFromPublicTape(tape: PublicTapePayload, options: RestoreCassetteOptions = {}): Omit<Cassette, 'id' | 'createdAt' | 'updatedAt'> {
+  const { id: _id, tracks, ...look } = structuredClone(tape);
+  return {
+    ...look,
+    tracks: tracks.map((track): Track => {
+      if (track.provider === 'jamendo') { const { provider: _provider, ...ui } = track; return ui; }
+      const { provider: _provider, hasAudio, ...ui } = track;
+      return { ...ui, ...(hasAudio && options.communityAudioUrl ? { audioUrl: options.communityAudioUrl(track.sourceId) } : {}) };
+    }),
+  };
 }

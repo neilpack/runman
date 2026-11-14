@@ -1,6 +1,6 @@
-// Explore: find songs other listeners made public and add them to your tapes, or look up a
-// listener by username and visit their page. Data comes from /api/explore (S3 once connected,
-// sample data locally). Tab and search live in the URL, so Back returns to the same results.
+// Explore: find songs other listeners made public and add them to your tapes, browse public tapes,
+// or look up a listener by username and visit their page. Data comes from /api/explore.
+// Tab and search live in the URL, so Back returns to the same results.
 
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
@@ -11,16 +11,23 @@ import { CatalogNote, ListenerGrid } from '@/components/explore/Listeners';
 import { LoadError } from '@/components/explore/LoadError';
 import { previewPlayer } from '@/components/explore/previewPlayer';
 import { SongList, SongListSkeleton, TrendingSongs } from '@/components/explore/Songs';
+import { TapeGrid } from '@/components/explore/Tapes';
 import { useRemote } from '@/hooks/useRemote';
 import '@/components/explore/explore.css';
 
-type Tab = 'songs' | 'listeners';
+type Tab = 'songs' | 'tapes' | 'listeners';
+const TABS: { id: Tab; label: string; placeholder: string; label2: string; max: number }[] = [
+  { id: 'songs', label: 'Songs', placeholder: 'Search songs, artists or usernames', label2: 'Search all shared songs', max: 200 },
+  { id: 'tapes', label: 'Tapes', placeholder: 'Search tape names, songs or usernames', label2: 'Search public tapes', max: 200 },
+  { id: 'listeners', label: 'Listeners', placeholder: 'Search usernames', label2: 'Search listeners by username', max: 25 },
+];
 const PAGE_SIZE = 20;
 const SEARCH_DELAY_MS = 250;
 
 export function ExplorePage() {
   const [params, setParams] = useSearchParams();
-  const tab: Tab = params.get('tab') === 'listeners' ? 'listeners' : 'songs';
+  const tab: Tab = TABS.find((t) => t.id === params.get('tab'))?.id ?? 'songs';
+  const current = TABS.find((t) => t.id === tab)!;
   const q = params.get('q') ?? '';
   const [adding, setAdding] = useState<PublicSong | null>(null);
 
@@ -55,17 +62,17 @@ export function ExplorePage() {
     return () => window.clearTimeout(timer);
   }, [text, setParams]);
 
-  const setTab = (next: Tab) => setParams(next === 'listeners' ? { tab: next } : {});
+  const setTab = (next: Tab) => setParams(next === 'songs' ? {} : { tab: next });
 
   return (
     <div className="page explore">
       <header className="ex-head">
         <h1>Explore</h1>
-        <p className="muted">Find songs other listeners have shared, add them to your tapes, and peek at their mixtapes.</p>
+        <p className="muted">Find songs other listeners have shared, add them to your tapes, and play their public mixtapes.</p>
       </header>
 
       <div className="ex-tabs" role="tablist" aria-label="Explore">
-        {(['songs', 'listeners'] as const).map((t) => (
+        {TABS.map(({ id: t, label }) => (
           <button
             key={t}
             type="button"
@@ -76,7 +83,7 @@ export function ExplorePage() {
             className={tab === t ? 'on' : ''}
             onClick={() => tab !== t && setTab(t)}
           >
-            {t === 'songs' ? 'Songs' : 'Listeners'}
+            {label}
           </button>
         ))}
       </div>
@@ -92,15 +99,15 @@ export function ExplorePage() {
             className="input"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder={tab === 'songs' ? 'Search songs, artists or usernames' : 'Search usernames'}
-            aria-label={tab === 'songs' ? 'Search all shared songs' : 'Search listeners by username'}
-            maxLength={tab === 'songs' ? 200 : 25}
+            placeholder={current.placeholder}
+            aria-label={current.label2}
+            maxLength={current.max}
             autoComplete="off"
             spellCheck={false}
           />
         </div>
 
-        {tab === 'songs' ? <SongsTab q={q.trim()} onAdd={setAdding} /> : <ListenersTab q={q.trim()} />}
+        {tab === 'songs' ? <SongsTab q={q.trim()} onAdd={setAdding} /> : tab === 'tapes' ? <TapesTab q={q.trim()} /> : <ListenersTab q={q.trim()} />}
       </div>
 
       {adding && <AddToTapeDialog key={adding.id} song={adding} onClose={() => setAdding(null)} />}
@@ -192,6 +199,33 @@ function SongsTab({ q, onAdd }: { q: string; onAdd: (song: PublicSong) => void }
               </div>
             )}
           </>
+        )}
+      </section>
+    </>
+  );
+}
+
+function TapesTab({ q }: { q: string }) {
+  const result = useRemote((signal) => api.exploreTapes({ q, limit: 50 }, signal), [q]);
+  return (
+    <>
+      <CatalogNote catalog={result.data?.catalog} />
+      <section className="ex-section" aria-labelledby="ex-tapes-title" aria-busy={result.loading}>
+        <h2 id="ex-tapes-title" className="ex-section-title">
+          {q ? <>Tapes matching “{q}”</> : 'Public tapes'}
+          {result.data && <span className="ex-count">{result.data.total}</span>}
+        </h2>
+        {result.error ? (
+          <LoadError what="tapes" error={result.error} onRetry={result.retry} />
+        ) : !result.data ? (
+          <p className="muted" role="status">Loading tapes…</p>
+        ) : result.data.tapes.length === 0 ? (
+          <div className="ex-empty">
+            <p>{q ? <>No public tapes match “{q}”.</> : 'No one has shared a tape yet.'}</p>
+            <p className="muted">Make one of your tapes public in the editor and it shows up here when you leave the editor.</p>
+          </div>
+        ) : (
+          <TapeGrid tapes={result.data.tapes} />
         )}
       </section>
     </>
