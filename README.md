@@ -125,6 +125,11 @@ The demo will use **one shared backend in `us-west-2`**, deployed from `main` th
 Amplify Hosting. Do not run a personal `ampx sandbox` or deploy the existing SAM
 template alongside it: both create cloud resources.
 
+Root `amplify.yml` prepares the main-only Cognito/frontend pipeline. It is not
+invoked by local build commands. Follow [authentication deployment](AUTH_DEPLOYMENT.md)
+for the reviewed console settings, route rewrites, and live identity checks;
+team account access and deployment approval are still required.
+
 After the shared deployment exists, obtain its generated frontend configuration
 from the repo root (replace the app ID; this reads deployment outputs):
 

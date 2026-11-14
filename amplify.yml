@@ -1,0 +1,40 @@
+version: 1
+applications:
+  - appRoot: frontend
+    backend:
+      phases:
+        preBuild:
+          commands:
+            - cd "$(git rev-parse --show-toplevel)"
+            - nvm use 24
+            - node --version
+            - test "$AWS_BRANCH" = main
+            - npm ci --include=dev --cache .npm --prefer-offline
+            - npm run typecheck
+            - npm run test:auth
+            - npm run test:legacy-api
+        build:
+          commands:
+            - cd "$(git rev-parse --show-toplevel)"
+            - nvm use 24
+            - test "$AWS_BRANCH" = main
+            - npx --no-install ampx pipeline-deploy --branch "$AWS_BRANCH" --app-id "$AWS_APP_ID" --outputs-out-dir frontend
+    frontend:
+      buildPath: /
+      phases:
+        preBuild:
+          commands:
+            - cd "$(git rev-parse --show-toplevel)"
+            - nvm use 24
+            - node --version
+            - test -s frontend/amplify_outputs.json
+        build:
+          commands:
+            - npm run build -w frontend
+      artifacts:
+        baseDirectory: frontend/dist
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - .npm/**/*
