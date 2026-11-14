@@ -51,6 +51,10 @@ export const CASSETTE_LIMITS = {
   title: 256,
   artist: 256,
   stickerKind: 80,
+  customStickers: 5,
+  customStickerStrokes: 160,
+  /** Coordinates (x and y each count) across all strokes of one drawing. */
+  customStickerCoords: 4000,
   url: 2048,
   objectKey: 1024,
   audioBytes: 25_000_000,

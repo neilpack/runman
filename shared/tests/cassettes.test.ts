@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Cassette, CassetteDocument, CassettePayload, CassetteValidationResult, SaveCassetteRequest, StoredAudioReference } from '../src/index.js';
-import { CASSETTE_LIMITS, cassetteFromDocument, cassetteToSaveRequest, validateCassetteDocument, validateDeleteCassetteRequest, validateListCassettesRequest, validateSaveCassetteRequest } from '../src/index.js';
+import { CASSETTE_LIMITS, cassetteFromDocument, sanitizeCustomStickers, cassetteToSaveRequest, validateCassetteDocument, validateDeleteCassetteRequest, validateListCassettesRequest, validateSaveCassetteRequest } from '../src/index.js';
 
 const timestamp = '2026-11-14T01:00:00.000Z';
 function tape(): Cassette {
@@ -271,4 +271,29 @@ test('list contract accepts only bounded opaque cursors/limits, never owner-sele
   invalid(validateListCassettesRequest({ cursor: 'x'.repeat(2049) }), 'cursor');
   invalid(validateListCassettesRequest({ ownerSub: 'foreign' }), 'ownerSub');
   invalid(validateListCassettesRequest({ PK: 'USER#foreign' }), 'PK');
+});
+
+test('hand-drawn custom stickers round-trip and are bounded', () => {
+  const art = { id: 'drawn-1', slot: 2, strokes: [{ color: '#ef4444', width: 5, points: [10, 10, 50.5, 60, 90, 90] }, { color: '#fff', width: 2.5, points: [40, 40] }] };
+  const local = { ...tape(), customStickers: [art], stickers: [{ id: 'placed', kind: 'custom-drawn-1', x: 50, y: 50, rotation: 0, scale: 1, color: '#ef4444' }] };
+  const request = ok(cassetteToSaveRequest(local, 0));
+  assert.deepEqual(request.cassette.customStickers, [art]);
+  const restored = ok(cassetteFromDocument(document(request.cassette))).cassette;
+  assert.deepEqual(restored.customStickers, [art]);
+
+  const withArt = (customStickers: unknown) => validateSaveCassetteRequest({ ...save(), cassette: { ...save().cassette, customStickers } });
+  invalid(withArt('<svg/>'), 'customStickers');
+  invalid(withArt(Array.from({ length: CASSETTE_LIMITS.customStickers + 1 }, (_, i) => ({ ...art, id: `a${i}`, slot: i % 5 }))), 'customStickers');
+  invalid(withArt([art, { ...art, id: 'drawn-2' }]), 'customStickers[1].slot');
+  invalid(withArt([{ ...art, slot: 5 }]), 'slot');
+  invalid(withArt([{ ...art, strokes: [{ color: 'red', width: 5, points: [1, 1] }] }]), 'color');
+  invalid(withArt([{ ...art, strokes: [{ color: '#fff', width: 5, points: [1, 101] }] }]), 'points');
+  invalid(withArt([{ ...art, strokes: [{ color: '#fff', width: 5, points: [1, 2, 3] }] }]), 'points');
+  invalid(withArt([{ ...art, strokes: [{ color: '#fff', width: 5, points: [1, 1], d: 'M0 0' }] }]), 'strokes[0].d');
+  const huge = Array.from({ length: CASSETTE_LIMITS.customStickerCoords + 2 }, () => 50);
+  invalid(withArt([{ ...art, strokes: [{ color: '#fff', width: 5, points: huge }] }]), 'strokes');
+
+  // The lenient reader (public profile snapshots) keeps good drawings and drops bad ones.
+  assert.deepEqual(sanitizeCustomStickers([art, { ...art, id: 'dupe-slot' }, { id: 'x', slot: 0, strokes: [{ color: '#fff', width: 99, points: [1, 1] }] }, 'junk']), [art, { id: 'x', slot: 0, strokes: [] }]);
+  assert.equal(sanitizeCustomStickers('nope'), undefined);
 });

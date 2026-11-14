@@ -29,6 +29,7 @@ export function snapshotTape(c: Cassette): TapeSnapshot {
     penStyle: c.penStyle,
     stickers: c.stickers,
     sideB: c.sideB,
+    customStickers: c.customStickers,
     updatedAt: c.updatedAt,
     trackCount: c.tracks.length,
   };
