@@ -33,9 +33,13 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   const cancelRef = useRef<HTMLButtonElement>(null);
   const [leaving, setLeaving] = useState(false);
+  const confirmTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(confirmTimer.current), []);
 
   useEffect(() => {
     if (!open) {
+      window.clearTimeout(confirmTimer.current);
+      confirmTimer.current = undefined;
       setLeaving(false);
       return;
     }
@@ -51,9 +55,10 @@ export function ConfirmDialog({
 
   const confirm = () => {
     if (!danger) return onConfirm();
+    if (confirmTimer.current !== undefined) return;
     // Let the "toss it" animation play before the item disappears.
     setLeaving(true);
-    window.setTimeout(onConfirm, EXIT_MS);
+    confirmTimer.current = window.setTimeout(() => { confirmTimer.current = undefined; onConfirm(); }, EXIT_MS);
   };
 
   return (

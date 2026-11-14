@@ -142,8 +142,9 @@ See [authentication setup](AUTH_DEPLOYMENT.md) for future pool/client settings a
 live checks. The supplied public IDs are configured locally; actual account/email
 flows and app-client settings have not been verified by the implementation agent.
 
-The local cassette library at `/`, editor at `/cassettes/:id/edit`, Status, and About
-remain public prototypes. The branded `/login` form uses Cognito SRP through the
+The cassette library at `/library` and editor at `/cassettes/:id/edit` support
+guest drafts and signed-in account libraries. Status and About remain public.
+The branded `/login` form uses Cognito SRP through the
 Amplify SDK for sign-up, email confirmation/resend, password reset, and sign-in.
 Same-session sign-up confirmation completes SDK-managed SRP auto-sign-in and then
 opens `/library`. If that temporary SDK context expired/reloaded, confirmation
@@ -157,9 +158,25 @@ malformed, or unusable configuration shows a sign-in setup message
 without mounting the sign-in flow or private content. The app still builds/runs
 without outputs and never simulates authenticated cloud access.
 
-The signed-in dashboard displays identity status and local audio preview. Private
-cloud cassette persistence and cloud audio authorization remain unconnected. Test real verification/reset email delivery,
-session reload, sign-out, and account switching after shared Cognito provisioning.
+The signed-in dashboard displays identity status and local audio preview. In the
+tape editor, **Save to account** calls the Cognito-protected cassette API; edits
+otherwise remain local drafts scoped by account. The library loads saved tapes,
+offers pagination, and copies only explicitly selected old browser/guest tapes
+into new account drafts. Conflicts preserve edits and offer confirmed reload or
+a new copy. Recordings remain local until cloud audio authorization integrates.
+
+For durable saves, create the DynamoDB table yourself and configure the backend
+using [the console setup guide](DATABASE_CONSOLE_SETUP.md). Cassette API storage
+defaults to disabled; explicit memory mode is local and ephemeral. The frontend
+does not contain AWS credentials. No resources are provisioned by this code.
+See [the implementation handoff](DATABASE_IMPLEMENTATION.md) for scope and pickup.
+For manual Lambda + API Gateway setup using the existing LabRole, follow
+[backend deployment preparation](BACKEND_DEPLOYMENT.md). `npm run package:backend`
+creates the ignored upload ZIP and runs offline handler checks; it deploys nothing.
+Run `npm run test:cassette-frontend` for offline client/store tests. The user has
+confirmed live save/reload, stale-save conflict, and account separation; public API
+and CORS checks also passed. See the handoff for the precise tested scope and
+remaining direct-API/pagination checks. Audio authorization remains separate.
 
 The retained Express `/api/items` example has no authentication or per-user ownership
 and is **disabled by default**. For local examples only, set both `NODE_ENV=development`
@@ -171,8 +188,8 @@ All example methods/subpaths return 404 unless that exact local opt-in is active
 Production/unset modes and AWS execution markers deny it even with the flag enabled;
 the Lambda entry point always disables examples independently of environment values.
 An unsafe opt-in is ignored rather than stopping the server, so `/api/health` stays
-public and available. This retires the public example API; it does not implement
-private cassette authorization, which requires a separately reviewed lab-compatible backend.
+public and available. Private tape data uses the separate Cognito-protected
+`/api/cassettes` API and never passes through these example endpoints.
 
 ### 5. Run the app
 
