@@ -1,6 +1,7 @@
 // Look-and-feel options for cassettes: palettes, fonts, stickers, tape length.
 
 import type { PenStyle, ShellType, StickerKind } from '@runman/shared';
+import { ICON_STICKERS, findIconSticker } from './stickerLibrary';
 
 export const SHELL_COLORS = [
   '#f9c6d3', '#2b2a5c', '#174a3a', '#a4a1bf', '#7a3d14', '#14857a',
@@ -38,7 +39,15 @@ export const SHELL_TYPES: { id: ShellType; label: string }[] = [
   { id: 'retro', label: 'Retro' },
 ];
 
-export const STICKER_KINDS: StickerKind[] = ['heart', 'star', 'note', 'smiley', 'bolt', 'disc', 'flower', 'sparkle'];
+/** Hand-drawn doodles rendered by StickerIcon. */
+export const DOODLE_STICKERS: StickerKind[] = ['heart', 'star', 'note', 'smiley', 'bolt', 'disc', 'flower', 'sparkle'];
+
+/** Every sticker in the editor tray: doodles first, then icon stickers (see stickerLibrary.ts). */
+export const STICKER_KINDS: StickerKind[] = [...DOODLE_STICKERS, ...ICON_STICKERS.map((s) => s.id)];
+
+export function stickerLabel(kind: StickerKind): string {
+  return findIconSticker(kind)?.label ?? kind;
+}
 
 export const STICKER_COLORS = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#a855f7', '#ec4899', '#ffffff', '#111827'];
 
