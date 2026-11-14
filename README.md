@@ -57,14 +57,12 @@ the locked dependencies for all workspaces.
 | Music search and audio | Browser `fetch`, audio/Web Audio, and MediaRecorder APIs; no extra library required |
 
 Set `VITE_JAMENDO_CLIENT_ID` in `frontend/.env.local` (see the example file).
-AWS runtime access also needs generated backend outputs and Amplify configuration;
-packages alone do not provision resources. Identity implementation is a separate change.
+AWS runtime access also needs generated backend outputs; packages alone do not
+provision resources. The frontend configures Amplify before rendering.
 Do not put AWS credentials in frontend code or commit generated outputs.
 
-The Amplify CLI crashes under this machine's Node 25.2.1 in `@typescript/vfs`;
-use Node 24 LTS and verify the CLI before deployment. AWS CLI is installed separately
-from npm dependencies. Commands below that create a cloud sandbox belong to the
-later deployment workflow, not installing this tooling.
+AWS CLI is installed separately from npm dependencies. Cloud provisioning is a
+later checkpoint, not part of installing tooling or running the frontend.
 
 Every team member needs:
 
@@ -97,7 +95,7 @@ aws --version
 ```bash
 git clone <repo-url>
 cd runman
-npm install
+npm ci
 ```
 
 ### 2. Configure AWS credentials
@@ -119,8 +117,9 @@ VITE_JAMENDO_CLIENT_ID=your_client_id_here
 ### 4. Shared Amplify backend (provisioning is a later checkpoint)
 
 `amplify/` currently defines Cognito email/password authentication, with guest
-credentials disabled. No backend has been deployed or connected to the UI by this
-checkpoint. DynamoDB, S3, and their ownership rules are later tasks.
+credentials disabled. Frontend identity integration is implemented; no backend has
+been provisioned or live authentication verified by this checkpoint. DynamoDB,
+S3, and their ownership rules are later tasks.
 
 The demo will use **one shared backend in `us-west-2`**, deployed from `main` through
 Amplify Hosting. Do not run a personal `ampx sandbox` or deploy the existing SAM
@@ -135,9 +134,21 @@ npx ampx generate outputs --app-id <amplify-app-id> --branch main --out-dir fron
 
 Use your team AWS profile with region `us-west-2`. Keep generated
 `amplify_outputs.json` and `.amplify/` out of Git; never put AWS credentials in
-frontend configuration. The next identity checkpoint will load these outputs and
-show a setup message when they are absent. Local scaffolding still runs without
-AWS access, but it does not simulate authenticated cloud access.
+frontend configuration. The frontend reads `frontend/amplify_outputs.json` at
+build/startup through a raw-file glob, validates the auth configuration, and
+configures Amplify once before React renders. After obtaining or replacing outputs,
+restart the dev server or rebuild the deployed frontend.
+
+Home and About remain public. Dashboard uses Amplify Authenticator for email/password
+sign-up, email confirmation/resend, password reset, and sign-in. It waits for a
+settled authenticated identity and offers sign-out; account changes reset its local
+state. Missing, malformed, or unusable configuration shows a sign-in setup message
+without mounting the sign-in flow or private content. The app still builds/runs
+without outputs and never simulates authenticated cloud access.
+
+The signed-in dashboard currently displays identity status only. Cassette saving
+and audio storage are not implemented. Test real verification/reset email delivery,
+session reload, sign-out, and account switching after shared Cognito provisioning.
 
 The retained Express `/api/items` example is not authenticated and has no per-user
 ownership. Do not use it for private cassette data or publish the SAM example;
@@ -157,6 +168,7 @@ npm run dev
 npm run typecheck             # all workspaces plus Amplify definitions
 npm run typecheck:amplify     # infrastructure definitions only; no AWS deployment
 npm run build                # retained Lambda bundle plus frontend
+npm run test:auth            # configuration and private-render boundary tests
 ```
 
 Use Node.js **24 LTS** for development and CI. On the current Node 25.2.1 machine,
@@ -167,23 +179,10 @@ A version-only check on Node 25 succeeded with process-local
 `NODE_OPTIONS=--no-experimental-webstorage`; this does not validate cloud deployment.
 `amplify/package.json` scopes ESM to the infrastructure directory without changing the existing root
 package's module behavior. Backend packages/CLI are root dev dependencies; frontend
-Amplify runtime/UI packages are installed, with configuration and identity UI still pending.
-
-### Shared AWS and music tooling
-
-Run `npm install` from the repo root to install every workspace's dependencies.
-
-| Work | Package/API |
-|---|---|
-| Frontend auth, data, and stored audio | `aws-amplify` (`aws-amplify/auth`, `aws-amplify/data`, `aws-amplify/storage`) |
-| Sign-in components | `@aws-amplify/ui-react` |
-| Infrastructure | Root Amplify backend/CLI and CDK dependencies |
-| Retained Express AWS helpers | Existing AWS SDK v3 DynamoDB/S3 packages in `backend/` |
-| Jamendo requests and playback/recording | Browser `fetch`, audio/Web Audio, and MediaRecorder APIs; no extra package required |
-
-Set `VITE_JAMENDO_CLIENT_ID` in `frontend/.env.local`. AWS operations will also need
-the shared backend's generated outputs and Amplify configuration; installing packages
-does not provision or connect cloud resources. Never include AWS credentials in browser code.
+Amplify runtime/UI packages are installed and wired to generated outputs. Focused
+tests use Node's test runner through the installed `tsx` tooling and server rendering;
+they verify configuration failure and private-content boundaries, not live Cognito
+flows, browser interactions, or backend authorization.
 
 ---
 

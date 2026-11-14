@@ -226,6 +226,42 @@ a {
   color: var(--color-ok);
 }
 
+/* Keep the managed sign-in flow aligned with the app's light/dark tokens. */
+.identity-flow {
+  --amplify-colors-background-primary: var(--color-surface);
+  --amplify-colors-background-secondary: var(--color-bg);
+  --amplify-colors-font-primary: var(--color-text);
+  --amplify-colors-font-secondary: var(--color-muted);
+  --amplify-colors-font-interactive: var(--color-primary);
+  --amplify-colors-font-error: var(--color-danger);
+  --amplify-colors-border-primary: var(--color-border);
+  --amplify-colors-border-secondary: var(--color-border);
+  --amplify-colors-brand-primary-80: var(--color-primary);
+  --amplify-colors-brand-primary-90: var(--color-primary-hover);
+  --amplify-colors-brand-primary-100: var(--color-primary-hover);
+  --amplify-fonts-default-variable: var(--font);
+  --amplify-fonts-default-static: var(--font);
+}
+
+.identity-flow [data-amplify-router] {
+  width: min(100%, 30rem);
+}
+
+.session-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  overflow-wrap: anywhere;
+}
+
+.btn:focus-visible,
+.nav-link:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: var(--space-1);
+}
+
 @media (max-width: 600px) {
   .app-header {
     flex-direction: column;
