@@ -61,7 +61,7 @@ export function EditCassettePage() {
   }
 
   // The library puts this tape on the pedestal when it opens (if it still exists).
-  const backToLibrary = () => navigate('/library', { state: { focusId: cassette.id } satisfies LibraryLocationState });
+  const backToLibrary = (cassetteSaved = false) => navigate('/library', { state: { focusId: cassette.id, cassetteSaved } satisfies LibraryLocationState });
   // Keyed per account context and tape so each tape gets its own editor (and its own on-exit public sync).
   return <Editor key={`${sync.context}:${cassette.id}`} cassette={cassette} onDone={backToLibrary} />;
 }
@@ -109,13 +109,10 @@ function Swatches({
   );
 }
 
-function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }) {
+function Editor({ cassette, onDone }: { cassette: Cassette; onDone: (cassetteSaved?: boolean) => void }) {
   const sync = useCassetteSync();
   const tapeSync = sync.tapes[cassette.id];
   const busy = Boolean(tapeSync?.saving || tapeSync?.deleting || tapeSync?.reloading);
-  const saveNeedsAttention = Boolean(tapeSync?.error || tapeSync?.conflict || tapeSync?.cloudMissing || sync.storageError);
-  const savePending = sync.status === 'authenticated' && Boolean(tapeSync?.saving || tapeSync?.dirty);
-  const saveLabel = saveNeedsAttention ? 'Changes need attention' : savePending ? 'Saving cassette...' : 'Cassette saved';
   const [finishing, setFinishing] = useState(false);
   const [saver] = useState(() => createEditorSaver(cassetteStore, cassette.id, sync.context));
   useEffect(() => {
@@ -127,7 +124,7 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
     setFinishing(true);
     const saved = await saver();
     setFinishing(false);
-    if (saved && cassetteStore.getSync().context === sync.context) onDone();
+    if (saved && cassetteStore.getSync().context === sync.context) onDone(true);
   };
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [side, setSide] = useState<TapeSide>('A');
@@ -326,16 +323,9 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
   return (
     <div className="studio editor workbench">
       <div className="editor-top">
-        <Link to="/library" className="studio-btn">
+        <button type="button" className="studio-btn" disabled={finishing || Boolean(tapeSync?.deleting || tapeSync?.reloading)} onClick={() => void finish()}>
           ← Library
-        </Link>
-        <span className="editor-saved" data-state={saveNeedsAttention ? 'attention' : savePending ? 'saving' : 'saved'} role="status" aria-live="polite" title={sync.status === 'guest' ? 'Saved in this browser' : undefined}>
-          <svg viewBox="0 0 20 20" aria-hidden="true">
-            {saveNeedsAttention ? <path d="M10 5v6m0 3h.01" /> : savePending ? <path d="M10 5v5l3 2" /> : <path d="m5 10 3 3 7-7" />}
-            <circle cx="10" cy="10" r="8" />
-          </svg>
-          {saveLabel}
-        </span>
+        </button>
         <div className="row">
           <button type="button" className="studio-btn danger" disabled={busy} onClick={() => setConfirmingDelete(true)}>
             Delete
