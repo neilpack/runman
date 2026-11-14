@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from 'react-router';
 
 const NAV_LINKS = [
-  { to: '/', label: 'Home' },
+  { to: '/home', label: 'Home' },
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/about', label: 'About' },
 ];
@@ -18,7 +18,7 @@ export function Layout() {
             <NavLink
               key={link.to}
               to={link.to}
-              end={link.to === '/'}
+              end={link.to === '/home'}
               className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}
             >
               {link.label}

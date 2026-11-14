@@ -1,5 +1,17 @@
 /* Design tokens — change these to re-theme the whole app. */
 :root {
+  /* RUNMAN brand palette. Accent is for sparing highlights only (focus rings, small details). */
+  --brand-accent: #e86012;
+  --brand-primary: #3e7cb1;
+  --brand-primary-dark: #2a5a85;
+  --brand-primary-deep: #173651;
+  --brand-secondary: #81a4cd;
+  --brand-background: #dbe4ee;
+  --brand-dark-background: #0a0a0a;
+  --brand-dark-background-light: #3a3a3a;
+  --font-display: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --font-nav: 'Jost', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
   --color-bg: #f8fafc;
   --color-surface: #ffffff;
   --color-text: #0f172a;
