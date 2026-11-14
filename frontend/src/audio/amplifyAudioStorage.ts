@@ -6,8 +6,9 @@ import { createAudioStorage, PLAYBACK_URL_SECONDS } from './audioStorage';
 export const audioStorage = createAudioStorage({
   async identityId() {
     const session = await fetchAuthSession();
-    if (!session.tokens || !session.identityId || !session.credentials) {
-      throw new Error('Sign in before accessing cloud audio.');
+    if (!session.tokens) throw new Error('Sign in before uploading audio.');
+    if (!session.identityId || !session.credentials) {
+      throw new Error('Cloud audio storage is not configured yet. Your audio is still available in the local preview.');
     }
     return session.identityId;
   },

@@ -1,13 +1,14 @@
-import { Link, Navigate } from 'react-router';
+import { Link, Navigate, useLocation } from 'react-router';
 import { AuthHeader } from '@/components/AuthHeader';
 import { LANDING_PATH, useSession } from '@/hooks/useSession';
 import { FlyingStickers, RetroCassetteStage } from '@/components/welcome/RetroCassetteStage';
 import '@/styles/auth.css';
 
-/** First screen a signed-out visitor sees. Signed-in visitors go straight to the landing page. */
+/** First screen a signed-out visitor sees; /welcome also lets signed-in users revisit it. */
 export function WelcomePage() {
   const session = useSession();
-  if (session.status === 'signedIn') return <Navigate to={LANDING_PATH} replace />;
+  const { pathname } = useLocation();
+  if (session.status === 'signedIn' && pathname !== '/welcome') return <Navigate to={LANDING_PATH} replace />;
   if (session.status === 'checking' || session.status === 'signingOut') return <div className="welcome"><AuthHeader /><main className="login-main"><p role="status">Checking your session…</p></main></div>;
 
   return (
