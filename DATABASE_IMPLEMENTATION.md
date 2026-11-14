@@ -1,0 +1,141 @@
+# Cassette database handoff
+
+## Goal and current scope
+Privately save and restore the complete cassette look and ordered track metadata
+for the signed-in owner. Steps 1 and 2 define and implement the authenticated API;
+step 3 connects frontend Save/Load with account-scoped drafts. AWS resources are
+created manually by the user. Existing UI `Cassette`/`Track` types remain unchanged.
+The user will create the table using [the console guide](DATABASE_CONSOLE_SETUP.md);
+agents must not create or modify AWS resources for this checkpoint.
+
+## Approved schema
+Future on-demand DynamoDB table, preferred region `us-west-2`; one item per tape:
+
+```text
+PK = USER#<verified Cognito sub>
+SK = CASSETTE#<stable cassette id>
+schemaVersion = 1
+revision = positive integer
+createdAt / updatedAt = canonical server ISO timestamps
+payload = complete CassettePayload
+```
+
+`shared/src/index.ts` exports DTOs, pure validators, and UI adapters from
+`cassettePersistence.ts`, `cassetteValidation.ts`, and `cassetteAdapters.ts`.
+Keep side B partial: missing style fields inherit A, missing B stickers mean none.
+Do not flatten defaults or reorder tracks. UUIDs and legacy alphanumeric IDs work;
+IDs may contain letters/digits/hyphens/underscores, max 128. Track IDs are unique
+across a cassette; sticker IDs are unique separately on each side. Sticker kinds
+are bounded identifiers, not inline SVG or a hardcoded catalog whitelist.
+
+Library tracks use provider `jamendo` plus required canonical source ID. Public
+HTTPS audio/artwork/license snapshots are optional; signed/expiring/token-bearing
+URLs are rejected. The UI adapter narrowly upgrades Creative Commons `/licenses/`
+HTTP links to HTTPS. Legacy library tracks without source IDs return explicit
+errors and remain local; no tracks are silently dropped.
+
+Uploads/recordings use provider `s3` and the existing `StoredAudioReference` shape;
+never persist blobs, data URLs, local previews, or temporary playback URLs. The
+adapter returns references separately when restoring legacy `source: recording`
+UI tracks. **Shape validation proves neither ownership nor object existence.**
+Step 2 must refuse private-audio references until server-side audio authorization
+and existence checks integrate; owning the cassette cannot authorize a foreign
+object key. No identity-pool key prefix is assumed by this schema.
+
+## Validation defaults
+- At most **100 tracks total** and **100 stickers per side**.
+- At most **256 KiB UTF-8 JSON for `CassettePayload`**, measured identically on
+  save and restore. Server envelope/keys have ample headroom below DynamoDB's
+  400 KiB item limit; the JSON estimate is not an exact DynamoDB billing-size calculation.
+- Name up to 120 characters (blank allowed); track title/artist 256; title must
+  be nonblank, artist may be blank. Sticker kind 80; URLs/cursor 2048; object key 1024.
+- Duration 0–86,400 seconds; sticker x/y 0–100, rotation −360–360, scale 0.1–5.
+  Hex colors only; finite numbers; supported enums; audio bytes 1–25,000,000.
+- Unknown fields and client-supplied owner/keys/revision/schema/timestamps
+  are rejected with `{path, message}` issues. Audio content type/source must match
+  its reference. Object keys are structural only. HTTPS checks are syntactic,
+  not DNS/provider/existence checks; the future server must not fetch arbitrary URLs.
+
+## API contract and ownership
+- `PUT /api/cassettes/:id`: `SaveCassetteRequest`, with path ID equal to payload ID.
+  `expectedRevision: 0` means conditional create; positive means conditional update.
+  Server increments revision, retains original createdAt, and sets updatedAt.
+- `GET /api/cassettes/:id` / successful PUT return `CassetteResponse` without PK/SK/owner.
+- `GET /api/cassettes?limit=&cursor=` returns items and optional opaque nextCursor.
+  Limit 1–100; default 25. Query only the verified user's PK,
+  ascending SK (deterministic stable-ID order), **never Scan**. Cursors are
+  HMAC-signed and bound to owner/query/page size; never accept caller-selected keys.
+- `DELETE /api/cassettes/:id` requires positive expectedRevision; stale writes/deletes
+  must conflict rather than overwrite. No last-write-wins behavior.
+  Delete removes only the owner's cassette metadata, even for an existing private-
+  audio-bearing record; it never deletes or authorizes any S3 object. File cleanup
+  belongs to the later audio integration.
+- Middleware verifies Cognito access JWT signature/issuer/client/token use/
+  expiry and derives owner from verified `sub`. No caller-selected owner or browser
+  AWS credentials. Later deployment uses an approved precreated LabRole, not new roles.
+
+## Five approval-gated steps
+1. **Complete:** contracts, strict validation, adapters/tests, this handoff; repair the
+   baseline config regression while preserving Jamendo and the dirty env example.
+2. **Complete:** JWT ownership middleware, private API/routes/repository and
+   conditional revisions/pagination; reject durable audio until authorization integrates.
+3. **Complete locally:** frontend explicit Save + unsaved indicator and account-scoped
+   local drafts. Edits persist locally; only explicit Save sends them to the API.
+   Offer explicit selection/import for old local drafts into the signed-in account,
+   retain originals, and never silently claim/import them as cloud-owned.
+4. **Next approval:** LabRole-only API deployment preparation. The user creates
+   the database themselves using `DATABASE_CONSOLE_SETUP.md`; agents do not provision it.
+5. **Next approval:** user-run provisioning and live two-account isolation, conflicts,
+   pagination, save/reload, and safe audio-reference rejection/integration.
+
+## Progress / pickup
+Step 1 source and local checks are complete: `npm run test:cassettes` (17 tests),
+`npm run test:legacy-api` (10 tests), root typecheck/build, and diff checks passed.
+The existing frontend chunk-size warning remains. Config repair restores `readConfig`
+and the exact development opt-in gate, retaining Jamendo's public local test client
+only outside production/AWS execution. The user-modified `backend/.env.example`
+was neither read nor edited.
+
+Step 2 is complete locally: `npm run test:cassette-api` (16 tests),
+`npm run test:cassettes` (17 tests), `npm run test:legacy-api` (10 tests), root
+typecheck, production build, and diff checks passed. All AWS tests use mocks;
+JWT tests use generated local RSA keys and cached JWKS. Live AWS remains untested.
+Runtime entry points:
+`routes/cassettes.ts` → `services/cassettesService.ts` → `aws/dynamoCassettes.ts`.
+`middleware/cassetteAuth.ts` verifies access JWTs with `aws-jwt-verify`.
+`services/cassetteRepository.ts` contains the repository port and explicit local
+memory implementation. `services/cassetteCursor.ts` signs pagination cursors.
+
+Copy variable names from `backend/cassettes.env.example` into the ignored backend
+environment as described in the console guide. Storage is disabled by default;
+`memory` requires exact development mode and no AWS markers; `dynamodb` requires
+the existing table. Both enabled modes require valid Cognito and cursor settings.
+No database/config error switches to memory. Cassette JSON parsing is bounded at
+300 KiB and runs after authentication; the payload limit remains 256 KiB.
+
+Step 3 is complete locally: `npm run test:cassette-frontend` (21 client/store tests),
+`npm run test:auth` (30 tests), root typecheck/build, final frontend build, and diff
+checks passed. The existing frontend chunk-size warning remains. Browser preview
+was unavailable in this session; no live AWS connection was tested.
+`frontend/src/api/client.ts`
+exposes `api.cassettes`, backed by the injectable authenticated client in
+`api/cassetteClient.ts`. `cassettes/store.ts` owns draft/revision/conflict state;
+`cassettes/runtime.ts` connects it synchronously to the existing session store.
+`hooks/useCassettes.ts` exposes both the tapes and sync status. Library and editor
+controls provide explicit import, Save, confirmed reload, copy, and conditional delete.
+
+Draft keys are scoped by pool/client/sub; guest drafts have a separate key. The
+old `runman.cassettes.v1` and guest tapes are offered only for selected import into
+fresh account drafts. Originals remain untouched; import does not upload. Never
+store auth tokens in drafts. Every API operation obtains an active account-matched
+access token; account generations and abort signals guard stale responses. A
+late save acknowledgement preserves edits made after clicking Save. Conflicts and
+network failures preserve the draft and its original expected revision.
+
+Once the user creates the table and configures an authorized running backend,
+frontend saves reach DynamoDB. A successful local build does not prove the live
+backend/table connection. Memory mode remains ephemeral development storage.
+Recorded/uploaded tracks remain local until audio authorization integrates; no
+tracks are silently omitted to make a tape saveable. No AWS resources have been
+created or changed by agents. Stop after step 3 checks and wait for approval of
+deployment preparation; never provision resources on the user's behalf.

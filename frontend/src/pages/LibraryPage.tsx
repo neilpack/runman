@@ -9,11 +9,13 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { TapeSide } from '@runman/shared';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { Cassette3D, CASSETTE_ASPECT } from '@/components/cassette/Cassette3D';
 import { CassetteDrawer } from '@/components/cassette/CassetteDrawer';
 import { CassettePlayer, type DeckControl } from '@/components/cassette/CassettePlayer';
-import { cassetteStore, useCassettes } from '@/hooks/useCassettes';
+import { cassetteStore, useCassettes, useCassetteSync } from '@/hooks/useCassettes';
+import { CassetteCloudPanel } from '@/components/cassette/CassetteCloudPanel';
+import { useSession } from '@/hooks/useSession';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { playSfx } from '@/audio/sfx';
 import './library.css';
@@ -55,6 +57,20 @@ function inside(el: Element | null, x: number, y: number, pad = 0) {
 }
 
 export function LibraryPage() {
+  const sync = useCassetteSync();
+  const session = useSession();
+  if (sync.status === 'hidden') return (
+    <div className="studio editor"><div className="editor-missing">
+      <p role="status">{session.status === 'checking' || session.status === 'signingOut' ? 'Checking your account…' : 'Your account session is unavailable.'}</p>
+      {session.error && <p role="alert">{session.error}</p>}
+      <Link to="/login" className="studio-btn">Sign in</Link>
+    </div></div>
+  );
+  return <LibraryStudio key={sync.context} />;
+}
+
+function LibraryStudio() {
+  const sync = useCassetteSync();
   const cassettes = useCassettes();
   const navigate = useNavigate();
   const small = useMediaQuery('(max-width: 760px)');
@@ -81,6 +97,7 @@ export function LibraryPage() {
   const drawerRef = useRef<HTMLElement>(null);
   const drag = useRef<DragState | null>(null);
   const zoneRef = useRef<Zone>(null);
+  const initiallyPlaced = useRef(false);
   const tiltTimer = useRef<number | undefined>(undefined);
   const lcdTimer = useRef<number | undefined>(undefined);
 
@@ -163,9 +180,9 @@ export function LibraryPage() {
 
   // Show the first tape on the pedestal when the page opens.
   useEffect(() => {
-    const first = cassetteStore.getAll()[0];
-    if (first) placeOnStage(first.id);
-  }, [placeOnStage]);
+    const first = cassettes[0];
+    if (!initiallyPlaced.current && first) { initiallyPlaced.current = true; placeOnStage(first.id); }
+  }, [placeOnStage, cassettes]);
 
   // Window-level pointer tracking. The listeners are attached once and always delegate to the
   // latest handlers, so a fast drag whose pointerup lands before React re-renders isn't lost.
@@ -323,6 +340,7 @@ export function LibraryPage() {
   };
 
   const create = () => {
+    if (cassetteStore.getSync().context !== sync.context) return;
     const c = cassetteStore.create();
     navigate(`/cassettes/${c.id}/edit`);
   };
@@ -331,6 +349,7 @@ export function LibraryPage() {
 
   return (
     <div className="studio library">
+      <CassetteCloudPanel onCreate={create} />
       <div
         ref={stageRef}
         className={`stage${dragMode === 'rotate' ? ' rotating' : ''}${drawerOpen ? ' drawer-open' : ''}`}

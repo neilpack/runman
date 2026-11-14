@@ -6,9 +6,10 @@ import { config } from './config.js';
 import { healthRouter } from './routes/health.js';
 import { itemsRouter } from './routes/items.js';
 import { musicRouter } from './routes/music.js';
+import { createCassettesRouter, type CassetteApiOptions } from './routes/cassettes.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 
-export function createApp({ disableLegacyExamples = false }: { disableLegacyExamples?: boolean } = {}) {
+export function createApp({ disableLegacyExamples = false, cassetteApi }: { disableLegacyExamples?: boolean; cassetteApi?: CassetteApiOptions } = {}) {
   const app = express();
   const allowLegacyExamples = config.legacyExamplesEnabled && !disableLegacyExamples;
 
@@ -17,6 +18,8 @@ export function createApp({ disableLegacyExamples = false }: { disableLegacyExam
   if (!allowLegacyExamples) app.use('/api/items', notFound);
 
   app.use(cors({ origin: config.corsOrigins }));
+  // Cassette authentication runs before its larger, bounded JSON parser.
+  app.use('/api/cassettes', createCassettesRouter(cassetteApi));
   app.use(express.json());
 
   // Register routes here. All API routes live under /api.

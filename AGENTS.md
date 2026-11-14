@@ -32,6 +32,8 @@ Run from the repo root.
 | `npm run sticker -- <name>` | Add a Reicon icon to the cassette sticker tray (`--filled`, `--search <term>`) |
 | `npm run typecheck:amplify` | Check Amplify definitions without deploying AWS resources |
 | `npm run test:legacy-api` | Typecheck and test local-example/API exposure boundaries |
+| `npm run test:cassettes` | Typecheck and test cassette persistence contracts/adapters |
+| `npm run test:cassette-api` | Offline JWT, owner-isolation, cursor and repository API tests |
 
 ## AWS deployment boundary
 

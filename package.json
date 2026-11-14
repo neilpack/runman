@@ -17,6 +17,9 @@
     "test:auth": "tsc -p frontend/tsconfig.test.json && tsx --tsconfig frontend/tsconfig.test.json --test frontend/tests/auth.test.tsx frontend/tests/authFlows.test.ts",
     "test:audio": "tsc -p frontend/tsconfig.test.json && tsx --tsconfig frontend/tsconfig.test.json --test frontend/tests/audioStorage.test.ts frontend/tests/recordAudio.test.ts",
     "test:legacy-api": "tsc -p backend/tsconfig.test.json && tsx --tsconfig backend/tsconfig.test.json --test backend/tests/legacyExamples.test.ts",
+    "test:cassettes": "tsc -p shared/tsconfig.test.json && tsx --tsconfig shared/tsconfig.test.json --test shared/tests/cassettes.test.ts",
+    "test:cassette-api": "tsc -p backend/tsconfig.test.json && tsx --tsconfig backend/tsconfig.test.json --test backend/tests/cassetteHttp.test.ts backend/tests/cassetteSecurity.test.ts backend/tests/cassetteRepository.test.ts",
+    "test:cassette-frontend": "tsc -p frontend/tsconfig.test.json && tsx --tsconfig frontend/tsconfig.test.json --test frontend/tests/cassetteClient.test.ts frontend/tests/cassetteStore.test.ts",
     "sticker": "npm run sticker -w @runman/frontend --"
   },
   "devDependencies": {
