@@ -1580,3 +1580,62 @@ html.dragging-sticker * {
   font-size: 0.74rem;
   color: var(--studio-muted);
 }
+
+/* ---- Workbench layout on smaller screens ----
+   The workbench panes are sticky so they stay in view beside each other on wide screens. Once
+   panes stack, sticky pins a pane over the ones scrolling under it (the tape covered the
+   customization and tracklist below ~860px), so stacked panes scroll normally. These need the
+   .workbench prefix to beat the sticky rules above. */
+@media (max-width: 1280px) {
+  /* The tracklist sits full width under the other two: no need to pin it or cap its height. */
+  .workbench .tracks.panel {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+  }
+}
+
+@media (max-width: 860px) {
+  /* One column that never grows past the screen: plain 1fr lets a pane widen to fit its widest
+     content, which pushed the customization panel off the side of a phone. */
+  .editor-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .editor-grid > * {
+    min-width: 0;
+  }
+
+  .workbench .preview {
+    position: static;
+  }
+
+  .workbench .tracks.panel {
+    /* The slight tilt reads as crooked once the notepad is full width on a narrow screen. */
+    transform: none;
+  }
+}
+
+@media (max-width: 600px) {
+  /* Phone tracklist: the title gets the row's full width, the move / remove buttons drop to a
+     second line on the right. (Tracklist only; the song picker has its own row layout.) */
+  .tracks .track-row {
+    flex-wrap: wrap;
+    row-gap: 6px;
+    padding: 10px 12px;
+  }
+
+  .tracks .track-meta {
+    flex: 1 1 0;
+  }
+
+  .tracks .track-actions {
+    order: 10;
+    flex-basis: 100%;
+    justify-content: flex-end;
+  }
+
+  .workbench .tracks.panel {
+    padding-left: 44px;
+  }
+}
