@@ -43,6 +43,29 @@ Built for **iHack 2026** (BYU-Idaho CSE Department Computing Society) — Theme:
 
 ## Prerequisites
 
+### Shared tooling
+
+Use **Node.js 24 LTS** (`.nvmrc`) and run `npm ci` from the repo root to install
+the locked dependencies for all workspaces.
+
+| Work | Installed tooling |
+|---|---|
+| AWS infrastructure | Root dev dependencies: `@aws-amplify/backend`, `@aws-amplify/backend-cli`, `aws-cdk-lib`, `constructs`, `@types/node` |
+| Frontend AWS access | `aws-amplify` for auth, data, and storage |
+| Sign-in components | `@aws-amplify/ui-react` |
+| Existing backend AWS helpers | AWS SDK v3 DynamoDB/S3 clients, document client, and S3 presigner |
+| Music search and audio | Browser `fetch`, audio/Web Audio, and MediaRecorder APIs; no extra library required |
+
+Set `VITE_JAMENDO_CLIENT_ID` in `frontend/.env.local` (see the example file).
+AWS runtime access also needs generated backend outputs and Amplify configuration;
+packages alone do not provision resources. Identity implementation is a separate change.
+Do not put AWS credentials in frontend code or commit generated outputs.
+
+The Amplify CLI crashes under this machine's Node 25.2.1 in `@typescript/vfs`;
+use Node 24 LTS and verify the CLI before deployment. AWS CLI is installed separately
+from npm dependencies. Commands below that create a cloud sandbox belong to the
+later deployment workflow, not installing this tooling.
+
 Every team member needs:
 
 - [Node.js 24 LTS](https://nodejs.org/) (`.nvmrc` pins major 24)
