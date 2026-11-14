@@ -11,7 +11,8 @@ interface FlowSnapshot {
 
 export interface AuthFlowSdk {
   signIn(input: { username: string; password: string; options: { authFlowType: 'USER_SRP_AUTH' } }): Promise<{ isSignedIn: boolean; nextStep: { signInStep: string } }>;
-  signUp(input: { username: string; password: string; options: { userAttributes: { email: string }; autoSignIn: false } }): Promise<{ nextStep: { signUpStep: string } }>;
+  autoSignIn(): Promise<{ isSignedIn: boolean; nextStep: { signInStep: string } }>;
+  signUp(input: { username: string; password: string; options: { userAttributes: { email: string }; autoSignIn: { authFlowType: 'USER_SRP_AUTH' } } }): Promise<{ nextStep: { signUpStep: string } }>;
   confirmSignUp(input: { username: string; confirmationCode: string }): Promise<{ nextStep: { signUpStep: string } }>;
   resendSignUpCode(input: { username: string }): Promise<unknown>;
   resetPassword(input: { username: string }): Promise<{ nextStep: { resetPasswordStep: string } }>;
@@ -63,6 +64,23 @@ export function createAuthFlow(sdk: AuthFlowSdk, session: SessionStore, initialM
       const active = () => !disposed && ticket === epoch;
       update({ pending: true, email, error: null, message: null });
       let attempt: number | null = null;
+      async function completeSignupSignIn() {
+        const fallback = 'Email confirmed. Automatic sign-in could not be completed. Log in to continue.';
+        attempt = session.beginSignIn();
+        if (attempt === null) { if (active()) update({ mode: 'login', message: fallback }); return; }
+        activeAttempt = attempt;
+        try {
+          const result = await sdk.autoSignIn();
+          const done = result.isSignedIn && result.nextStep.signInStep === 'DONE';
+          const authenticated = await session.settleSignIn(attempt, done && active());
+          attempt = null;
+          activeAttempt = null;
+          if (active() && !authenticated) update({ mode: 'login', message: fallback });
+        } catch {
+          if (attempt !== null) { await session.settleSignIn(attempt, false); attempt = null; activeAttempt = null; }
+          if (active()) update({ mode: 'login', message: fallback });
+        }
+      }
       try {
         if (resend) {
           if (mode === 'confirmSignup') await sdk.resendSignUpCode({ username: email });
@@ -94,15 +112,17 @@ export function createAuthFlow(sdk: AuthFlowSdk, session: SessionStore, initialM
             update({ mode: 'requestReset', message: 'Reset your password to continue.' });
           } else update({ error: 'This account requires an additional sign-in step that this app does not support. Contact the team.' });
         } else if (mode === 'signup') {
-          const result = await sdk.signUp({ username: email, password: input.password, options: { userAttributes: { email }, autoSignIn: false } });
+          const result = await sdk.signUp({ username: email, password: input.password, options: { userAttributes: { email }, autoSignIn: { authFlowType: 'USER_SRP_AUTH' } } });
           if (!active()) return;
           if (result.nextStep.signUpStep === 'CONFIRM_SIGN_UP') update({ mode: 'confirmSignup', message: 'Check your email for a confirmation code.' });
+          else if (result.nextStep.signUpStep === 'COMPLETE_AUTO_SIGN_IN') await completeSignupSignIn();
           else if (result.nextStep.signUpStep === 'DONE') update({ mode: 'login', message: 'Your account is ready. Log in to continue.' });
           else update({ error: 'Account setup requires an unsupported step. Contact the team.' });
         } else if (mode === 'confirmSignup') {
           const result = await sdk.confirmSignUp({ username: email, confirmationCode: input.code.trim() });
           if (!active()) return;
           if (result.nextStep.signUpStep === 'DONE') update({ mode: 'login', message: 'Email confirmed. Log in to continue.' });
+          else if (result.nextStep.signUpStep === 'COMPLETE_AUTO_SIGN_IN') await completeSignupSignIn();
           else update({ error: 'Confirmation requires an unsupported step. Return to log in or contact the team.' });
         } else if (mode === 'requestReset') {
           const result = await sdk.resetPassword({ username: email });
