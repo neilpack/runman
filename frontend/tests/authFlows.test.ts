@@ -5,7 +5,7 @@ import { createAuthFlow, type AuthFlowSdk } from '../src/auth/authFlow';
 import { createSessionStore, readConfirmedUser } from '../src/auth/sessionStore';
 
 const user: AuthUser = { userId: 'account-a', username: 'account-a' };
-const fields = { email: ' user@example.test ', password: ' Password9! ', code: ' 123456 ' };
+const fields = { email: ' user@example.test ', password: ' Password9! ', confirmPassword: ' Password9! ', username: ' tape_fan ', code: ' 123456 ' };
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason: Error) => void;
@@ -141,7 +141,7 @@ test('signup/resend use SRP auto-signin; confirmation DONE without SDK context f
       assert.equal(input.username, 'user@example.test');
       assert.equal(input.password, fields.password);
       assert.deepEqual(input.options.autoSignIn, { authFlowType: 'USER_SRP_AUTH' });
-      assert.deepEqual(input.options.userAttributes, { email: 'user@example.test' });
+      assert.deepEqual(input.options.userAttributes, { email: 'user@example.test', preferred_username: 'tape_fan' });
       return { nextStep: { signUpStep: 'CONFIRM_SIGN_UP' } };
     },
     async resendSignUpCode(input) { resent = input.username; },
@@ -357,4 +357,44 @@ test('sign-out failure rechecks SDK rather than restoring a previously cached us
   assert.equal(store.getSnapshot().status, 'signedOut');
   assert.equal(store.getSnapshot().user, null);
   assert.match(store.getSnapshot().error!, /Sign-out failed/);
+});
+
+test('signup requires a valid username and matching passwords before calling Cognito', async () => {
+  let calls = 0;
+  const flow = createAuthFlow(service({ async signUp() { calls++; return { nextStep: { signUpStep: 'CONFIRM_SIGN_UP' } }; } }), session(), 'signup');
+  await flow.submit({ ...fields, confirmPassword: 'Different9!' });
+  assert.equal(flow.getSnapshot().error, 'Passwords do not match.');
+  await flow.submit({ ...fields, username: 'ab' });
+  assert.match(flow.getSnapshot().error ?? '', /^Username: /);
+  await flow.submit({ ...fields, username: undefined });
+  assert.match(flow.getSnapshot().error ?? '', /^Username: /);
+  assert.equal(calls, 0);
+  assert.equal(flow.getSnapshot().mode, 'signup');
+  assert.equal(flow.getSnapshot().pending, false);
+});
+
+test('signup stops on a taken username; a failed availability check does not block', async () => {
+  const signedUp: string[] = [];
+  const sdk = service({ async signUp(input) { signedUp.push(input.options.userAttributes.preferred_username); return { nextStep: { signUpStep: 'CONFIRM_SIGN_UP' } }; } });
+  const taken = createAuthFlow(sdk, session(), 'signup', { async isUsernameTaken(name) { assert.equal(name, 'tape_fan'); return true; } });
+  await taken.submit(fields);
+  assert.equal(taken.getSnapshot().error, '@tape_fan is already taken. Pick another username.');
+  assert.equal(taken.getSnapshot().mode, 'signup');
+  const offline = createAuthFlow(sdk, session(), 'signup', { async isUsernameTaken() { throw new Error('offline'); } });
+  await offline.submit(fields);
+  assert.equal(offline.getSnapshot().mode, 'confirmSignup');
+  assert.deepEqual(signedUp, ['tape_fan']);
+});
+
+test('password reset requires the new password twice', async () => {
+  let resets = 0;
+  const flow = createAuthFlow(service({ async confirmResetPassword() { resets++; } }), session(), 'requestReset');
+  await flow.submit(fields);
+  assert.equal(flow.getSnapshot().mode, 'confirmReset');
+  await flow.submit({ ...fields, confirmPassword: 'nope' });
+  assert.equal(flow.getSnapshot().error, 'Passwords do not match.');
+  assert.equal(resets, 0);
+  await flow.submit(fields);
+  assert.equal(flow.getSnapshot().mode, 'login');
+  assert.equal(resets, 1);
 });

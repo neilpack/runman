@@ -1,3 +1,4 @@
+import { validateUsername } from '../profile/profileModel';
 import type { SessionStore } from './sessionStore';
 
 export type AuthMode = 'login' | 'signup' | 'confirmSignup' | 'requestReset' | 'confirmReset';
@@ -12,11 +13,26 @@ interface FlowSnapshot {
 export interface AuthFlowSdk {
   signIn(input: { username: string; password: string; options: { authFlowType: 'USER_SRP_AUTH' } }): Promise<{ isSignedIn: boolean; nextStep: { signInStep: string } }>;
   autoSignIn(): Promise<{ isSignedIn: boolean; nextStep: { signInStep: string } }>;
-  signUp(input: { username: string; password: string; options: { userAttributes: { email: string }; autoSignIn: { authFlowType: 'USER_SRP_AUTH' } } }): Promise<{ nextStep: { signUpStep: string } }>;
+  signUp(input: { username: string; password: string; options: { userAttributes: { email: string; preferred_username: string }; autoSignIn: { authFlowType: 'USER_SRP_AUTH' } } }): Promise<{ nextStep: { signUpStep: string } }>;
   confirmSignUp(input: { username: string; confirmationCode: string }): Promise<{ nextStep: { signUpStep: string } }>;
   resendSignUpCode(input: { username: string }): Promise<unknown>;
   resetPassword(input: { username: string }): Promise<{ nextStep: { resetPasswordStep: string } }>;
   confirmResetPassword(input: { username: string; confirmationCode: string; newPassword: string }): Promise<void>;
+}
+
+export interface AuthFlowInput {
+  email: string;
+  password: string;
+  code: string;
+  /** Signup only: the public name other listeners see (Cognito `preferred_username`). */
+  username?: string;
+  /** Signup and password reset: must match `password`. */
+  confirmPassword?: string;
+}
+
+export interface AuthFlowOptions {
+  /** Best-effort check that nobody on Explore already uses this name. Errors count as "not taken". */
+  isUsernameTaken?(username: string): Promise<boolean>;
 }
 
 function errorText(error: unknown) {
@@ -33,7 +49,7 @@ function errorText(error: unknown) {
   }
 }
 
-export function createAuthFlow(sdk: AuthFlowSdk, session: SessionStore, initialMode: AuthMode) {
+export function createAuthFlow(sdk: AuthFlowSdk, session: SessionStore, initialMode: AuthMode, options: AuthFlowOptions = {}) {
   let snapshot: FlowSnapshot = { mode: initialMode, email: '', pending: false, error: null, message: null };
   let epoch = 0;
   let disposed = false;
@@ -56,12 +72,18 @@ export function createAuthFlow(sdk: AuthFlowSdk, session: SessionStore, initialM
       update({ mode, pending: false, error: null, message: null });
     },
     dispose() { disposed = true; cancel(); },
-    async submit(input: { email: string; password: string; code: string }, resend = false) {
+    async submit(input: AuthFlowInput, resend = false) {
       if (disposed || snapshot.pending) return;
       const ticket = ++epoch;
       const mode = snapshot.mode;
       const email = mode === 'confirmSignup' || mode === 'confirmReset' ? snapshot.email : input.email.trim();
       const active = () => !disposed && ticket === epoch;
+      const username = (input.username ?? '').trim();
+      if (!resend && (mode === 'signup' || mode === 'confirmReset')) {
+        const problem = mode === 'signup' ? validateUsername(username) : null;
+        if (problem) { update({ email, error: `Username: ${problem}`, message: null }); return; }
+        if (input.password !== input.confirmPassword) { update({ email, error: 'Passwords do not match.', message: null }); return; }
+      }
       update({ pending: true, email, error: null, message: null });
       let attempt: number | null = null;
       async function completeSignupSignIn() {
@@ -112,7 +134,10 @@ export function createAuthFlow(sdk: AuthFlowSdk, session: SessionStore, initialM
             update({ mode: 'requestReset', message: 'Reset your password to continue.' });
           } else update({ error: 'This account requires an additional sign-in step that this app does not support. Contact the team.' });
         } else if (mode === 'signup') {
-          const result = await sdk.signUp({ username: email, password: input.password, options: { userAttributes: { email }, autoSignIn: { authFlowType: 'USER_SRP_AUTH' } } });
+          const taken = await options.isUsernameTaken?.(username).catch(() => false);
+          if (!active()) return;
+          if (taken) { update({ error: `@${username} is already taken. Pick another username.` }); return; }
+          const result = await sdk.signUp({ username: email, password: input.password, options: { userAttributes: { email, preferred_username: username }, autoSignIn: { authFlowType: 'USER_SRP_AUTH' } } });
           if (!active()) return;
           if (result.nextStep.signUpStep === 'CONFIRM_SIGN_UP') update({ mode: 'confirmSignup', message: 'Check your email for a confirmation code.' });
           else if (result.nextStep.signUpStep === 'COMPLETE_AUTO_SIGN_IN') await completeSignupSignIn();
