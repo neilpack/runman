@@ -548,26 +548,111 @@
 .picker-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: 1000;
   display: grid;
   place-items: center;
-  padding: 16px;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
+  padding: clamp(12px, 3vw, 40px);
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(6px);
+  color: var(--studio-text);
+  animation: picker-fade 0.2s ease-out;
 }
 
+/* Big, page-sized song browser */
 .picker {
-  width: min(560px, 100%);
-  max-height: 80vh;
-  overflow-y: auto;
-  padding: 22px;
-  border-radius: 24px;
-  background: var(--studio-panel-2);
-  color: var(--studio-text);
+  width: min(1040px, 100%);
+  height: min(88vh, 920px);
   display: flex;
   flex-direction: column;
   gap: 16px;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  padding: clamp(18px, 2.5vw, 30px);
+  border-radius: 26px;
+  background: linear-gradient(180deg, var(--studio-panel-2), var(--studio-panel));
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  color: var(--studio-text);
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.7);
+  animation: picker-pop 0.28s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+.picker .panel-head h2 {
+  font-size: 1rem;
+}
+
+.picker .studio-input {
+  padding: 14px 18px;
+  font-size: 1.05rem;
+  border-radius: 14px;
+}
+
+/* Results scroll inside the window; header and search stay put */
+.picker > .track-rows,
+.picker > .tracks-empty,
+.picker > p {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+}
+
+.picker > .track-rows {
+  gap: 8px;
+  padding-right: 4px;
+  align-content: start;
+}
+
+.picker .track-row {
+  gap: 16px;
+  padding: 12px 16px;
+  border-radius: 14px;
+}
+
+.picker .track-row:hover {
+  background: #17171a;
+}
+
+.picker .track-artwork,
+.picker .track-artwork-placeholder {
+  flex-basis: 56px;
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+}
+
+.picker .track-meta strong {
+  font-size: 1rem;
+}
+
+.picker .track-preview {
+  width: 240px;
+}
+
+@keyframes picker-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes picker-pop {
+  from {
+    transform: translateY(18px) scale(0.96);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 700px) {
+  .picker {
+    height: 92vh;
+    border-radius: 20px;
+  }
+
+  .picker .track-row {
+    flex-wrap: wrap;
+  }
+
+  .picker .track-preview {
+    width: 100%;
+    order: 10;
+  }
 }
 
 @media (max-width: 860px) {

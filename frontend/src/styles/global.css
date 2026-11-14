@@ -286,7 +286,9 @@ a {
 }
 
 /* Cassette studio (Library + Edit pages): dark, full-width scenes. */
-.studio {
+/* .studio-vars carries just the theme tokens, for things rendered outside .studio (e.g. modals in <body>). */
+.studio,
+.studio-vars {
   --studio-bg: #1c1c1f;
   --studio-bg-2: #2a2a2e;
   --studio-panel: #18181b;
@@ -296,6 +298,9 @@ a {
   --studio-accent: #f43f5e;
   --studio-wood: #9a5a06;
   --studio-wood-dark: #6e3f03;
+}
+
+.studio {
   color: var(--studio-text);
   background: radial-gradient(ellipse at 30% 20%, var(--studio-bg-2), var(--studio-bg) 70%);
 }
