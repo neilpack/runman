@@ -86,7 +86,6 @@
   padding: 0 4%;
   background: color-mix(in srgb, var(--shell) 78%, #000);
   color: rgba(255, 255, 255, 0.92);
-  font-family: system-ui, sans-serif;
   font-weight: 800;
   font-size: 2.6em;
   letter-spacing: 0.12em;

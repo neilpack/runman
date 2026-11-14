@@ -25,7 +25,6 @@ export interface ApiError {
   details?: unknown;
 }
 
-<<<<<<< HEAD
 // ---------------------------------------------------------------------------
 // Cassettes
 // ---------------------------------------------------------------------------
@@ -110,3 +109,4 @@ export interface MusicSearchResponse {
   total: number;
   offset: number;
   limit: number;
+}

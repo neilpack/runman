@@ -4,7 +4,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import type { Cassette, SideLook, Sticker, StickerKind, TapeSide } from '@runman/shared';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Cassette3D } from '@/components/cassette/Cassette3D';
+import { CassetteFace } from '@/components/cassette/CassetteFace';
 import { ColorPicker } from '@/components/cassette/ColorPicker';
 import { FlippableFace } from '@/components/cassette/FlippableFace';
 import { StickerIcon } from '@/components/cassette/StickerIcon';
@@ -18,7 +20,7 @@ import {
   STICKER_COLORS,
   STICKER_KINDS,
 } from '@/components/cassette/constants';
-import { patchSide, sideBHasOwnStyle, sideLook } from '@/components/cassette/sides';
+import { faceFor, patchSide, sideBHasOwnStyle, sideLook } from '@/components/cassette/sides';
 import { cassetteStore, newId, useCassette } from '@/hooks/useCassettes';
 import { useOrbit } from '@/hooks/useOrbit';
 import './editor.css';
@@ -91,6 +93,8 @@ function Swatches({
 function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [side, setSide] = useState<TapeSide>('A');
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const cancelDelete = useCallback(() => setConfirmingDelete(false), []);
   const [stickerColor, setStickerColor] = useState(STICKER_COLORS[0]);
   const orbit = useOrbit({ x: -10, y: 25 });
   const faceRef = useRef<HTMLDivElement>(null);
@@ -196,10 +200,10 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
   }, [selectedId]);
 
   const deleteCassette = () => {
-    if (window.confirm(`Delete "${cassette.name}"? This can't be undone.`)) {
-      cassetteStore.remove(cassette.id);
-      onDone();
-    }
+    // Leave the page first so it never flashes "Tape not found".
+    const id = cassette.id;
+    onDone();
+    cassetteStore.remove(id);
   };
 
   return (
@@ -210,7 +214,7 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
         </Link>
         <span className="studio-muted editor-saved">Changes save automatically</span>
         <div className="row">
-          <button type="button" className="studio-btn danger" onClick={deleteCassette}>
+          <button type="button" className="studio-btn danger" onClick={() => setConfirmingDelete(true)}>
             Delete
           </button>
           <button type="button" className="studio-btn primary" onClick={onDone}>
@@ -284,20 +288,34 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
               </div>
             </div>
             {side === 'B' && (
-              <p className="side-block-note studio-muted">
-                {sideBHasOwnStyle(cassette)
-                  ? 'Side B has its own label style.'
-                  : 'Side B copies side A until you change it.'}
-                {sideBHasOwnStyle(cassette) && (
+              sideBHasOwnStyle(cassette) ? (
+                <div className="sync-card">
+                  <div className="sync-text">
+                    <strong>Side B has its own style</strong>
+                    <span>Copy side A's label colour, ink and pen. Stickers stay.</span>
+                  </div>
                   <button
                     type="button"
-                    className="link-btn"
+                    className="sync-btn"
                     onClick={() => update({ sideB: { stickers: cassette.sideB?.stickers } })}
                   >
-                    Match side A
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M4 9a8 8 0 0 1 14-3l2 2M20 4v4h-4M20 15a8 8 0 0 1-14 3l-2-2M4 20v-4h4" />
+                    </svg>
+                    Sync with side A
                   </button>
-                )}
-              </p>
+                </div>
+              ) : (
+                <div className="sync-card synced">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M5 12.5l4.5 4.5L19 7.5" />
+                  </svg>
+                  <div className="sync-text">
+                    <strong>Synced with side A</strong>
+                    <span>Change any colour or pen below to give side B its own look.</span>
+                  </div>
+                </div>
+              )
             )}
 
             <div className="field-row">
@@ -450,6 +468,24 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
       <div className="editor-tracks">
         <TrackList cassette={cassette} side={side} onSideChange={setSide} onChange={(tracks) => update({ tracks })} />
       </div>
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        danger
+        title="Toss this tape?"
+        message={
+          <>
+            <strong>{cassette.name || 'Untitled'}</strong> and its tracklist will be deleted from your library. This
+            can't be undone.
+          </>
+        }
+        confirmLabel="Delete tape"
+        cancelLabel="Keep it"
+        onConfirm={deleteCassette}
+        onCancel={cancelDelete}
+      >
+        <CassetteFace cassette={faceFor(cassette, 'A')} width={200} />
+      </ConfirmDialog>
     </div>
   );
 }
