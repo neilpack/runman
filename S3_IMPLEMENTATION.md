@@ -3,8 +3,8 @@
 ## Goal and boundary
 Allow signed-in users to upload/record audio, save complete tapes, reload, and play
 their own audio. Work on `feat/s3-integration`, which includes the cassette PR's
-code. Existing live cassette saves work for Jamendo tracks. **Checkpoint 1 is
-complete locally and verified; checkpoint 2 needs approval.** The user makes all AWS
+code. Existing live cassette saves work for Jamendo tracks. **Checkpoints 1 and 2
+are complete locally; checkpoint 3 needs approval.** The user makes all AWS
 console changes. Agents must not provision or modify AWS resources.
 
 Reuse the existing Cognito access-token middleware, Express/Lambda, LabRole,
@@ -55,7 +55,7 @@ Keep the separate audio-storage worktree untouched. Preserve the uncommitted
    requests/responses, internal media ledger, validation/key/version rules, and
    focused offline tests. Strictly reject client ownership/server fields. No SDK
    calls, dependencies, frontend changes, or AWS operations.
-2. **Backend:** authenticated routes, S3 helpers and media repository with injected
+2. **Complete locally — backend:** authenticated routes, S3 helpers and media repository with injected
    offline tests. Validate private references during cassette save; issue playback
    grants only for owned READY media. Preserve conditional cassette revisions and
    read-only/public Explore namespace boundaries. Never fetch caller-provided URLs.
@@ -73,13 +73,13 @@ Keep the separate audio-storage worktree untouched. Preserve the uncommitted
 
 Explore publication and `source: community` cloud persistence are separate work;
 keep those tracks locally with explicit errors until their contract is integrated.
-No existing app flow, dependency, or AWS resource has changed in checkpoint 1.
+No AWS resources have been changed. Frontend upload/playback is not connected yet.
 
 ## Checkpoint 1 pickup
 `shared/src/index.ts` exports `mediaPersistence.ts` and `mediaValidation.ts`.
-The proposed future endpoints are POST `/api/media/uploads` with
+The implemented endpoints are POST `/api/media/uploads` with
 `{source,contentType,sizeBytes,sha256}` and POST `/api/media/complete` /
-`/api/media/playback` with exactly `{mediaId}`. Routes are not implemented yet.
+`/api/media/playback` with exactly `{mediaId}`.
 Upload responses contain a transient nested `upload:{url,fields,expiresAt}` grant;
 completion returns `StoredAudioReference`; playback returns a temporary URL/expiry.
 
@@ -89,7 +89,7 @@ noncanonical checksum/MIME, invalid byte counts, owner/key mismatches, invalid
 versions and time ordering. Requests are bounded to 4 KiB and ledger records to
 16 KiB. `mediaObjectKey` / `parseMediaObjectKey` provide structural helpers only.
 Response grant validation, authentication, S3 verification and conditional READY
-transitions belong to checkpoint 2; no validator proves those operations happened.
+transitions are implemented separately in checkpoint 2; validators alone do not prove them.
 
 Media intent expiry is 1–300 seconds after creation. A READY record may be read
 after that deadline; completion retries must return its original pinned version.
@@ -97,16 +97,57 @@ Future browser integration must deliberately canonicalize MIME parameters before
 signing and send the identical canonical value to S3. Original browser forms may
 contain spacing that is not accepted as canonical contract input.
 
-Run `npm run test:media` for the focused contract suite. Keep the cassette-save
-private-audio guard and obsolete adapter unchanged until their approved integration
-checkpoints; adding types does not make audio upload or save work yet.
+Run `npm run test:media` for the focused contract suite. The obsolete frontend
+adapter remains unchanged until checkpoint 3. Types alone do not perform uploads.
 
 Validation passed: 12 media contract tests, 18 cassette regression tests, root
 typecheck (including Amplify definitions), production build, and diff checks.
 The existing frontend bundle-size/dynamic-import warnings remain. Architect review
 found no remaining contract blockers. No AWS operations, new dependencies, or
 frontend/API behavior changes occurred; the user's env-example edit is untouched.
-Stop here and request approval before backend checkpoint 2.
+That checkpoint introduced contracts only; backend integration is described below.
+
+## Checkpoint 2 pickup
+- `backend/src/routes/media.ts` exposes the three POST endpoints using the existing
+  Cognito access-token verifier before the 4 KiB request parser. Upload creation
+  returns 201; completion/playback return 200. No client ownership fields are accepted.
+- `mediaRuntime.ts` defaults disabled. Enable only after manual setup with
+  `MEDIA_STORAGE_MODE=s3` and `PRIVATE_AUDIO_BUCKET`; reuse existing region, Cognito
+  and cassette-table settings. See `backend/media.env.example`. DynamoDB cassette
+  mode is required; the private bucket must differ from public `UPLOADS_BUCKET`.
+  No startup AWS requests or production memory fallback are introduced.
+- `mediaService.ts` coordinates the ledger and S3 ports. `aws/dynamoMedia.ts` uses
+  consistent owner-scoped reads and conditional writes. Completion checks latest
+  metadata, checks the captured version, then conditionally finalizes READY.
+  Concurrent completion returns the validated winner; retries cannot repin bytes.
+- `aws/privateMedia.ts` uses SDK v3 presigned POST (new runtime dependency
+  `@aws-sdk/s3-presigned-post`), checksum-enabled HEAD, and version-specific GET.
+  It requires bucket versioning Enabled and bounds grants by five minutes, intent
+  deadline where applicable, and known signing-credential expiry. Signing uses a
+  resolved credential snapshot. No general credentials reach the browser.
+- Cassette Save/get/list authorize every private reference against its owner's
+  READY ledger and pinned object. Foreign keys and mismatched reference metadata
+  fail before S3 access. Same-owner copies may reuse media. Jamendo-only saves
+  continue when media is disabled. Existing revision checks remain unchanged.
+- List authorization runs at most four checks concurrently with a budget of 100
+  distinct files per response. Pages stop at whole-cassette boundaries; continuation
+  follows the last returned cassette so remaining items are not skipped.
+- No physical deletion, GC or expiry rules were added. No frontend code changed,
+  live Lambda was not deployed, and actual LabRole/S3 permissions remain unverified.
+  The user-edited `backend/.env.example` remains outside the commit.
+
+Validation: 26 media API/storage tests, 12 media contracts, 23 cassette frontend,
+18 cassette contracts, 16 cassette API, 10 legacy boundary, 6 Explore, and 3 package
+tests passed offline (114 total). Root typecheck and production build passed.
+The generated Lambda ZIP passed its offline smoke with media configured: health
+200, unauthenticated cassette/media routes 401, legacy routes 404, zero AWS network
+requests. Existing frontend bundle warnings remain. Architect review found no
+remaining checkpoint blockers; live behavior is reserved for checkpoint 5.
+
+Stop and request approval before **checkpoint 3**: replace the old identity-pool
+frontend adapter with authenticated API requests, checksum/direct POST/completion,
+and renewable playback URLs while preserving account guards, cancellation, local
+preview and durable-reference behavior. Do not deploy resources during that step.
 
 ## Sources
 AWS [POST fields](https://docs.aws.amazon.com/AmazonS3/latest/developerguide/RESTObjectPOST.html)

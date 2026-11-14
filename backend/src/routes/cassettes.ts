@@ -6,12 +6,14 @@ import { createDynamoCassetteRepository } from '../aws/dynamoCassettes.js';
 import { createMemoryCassetteRepository, type CassetteRepository } from '../services/cassetteRepository.js';
 import { createCassetteCursor } from '../services/cassetteCursor.js';
 import { createCassettesService } from '../services/cassettesService.js';
+import type { MediaAuthorizer } from '../services/mediaService.js';
 
 export interface CassetteApiOptions {
   settings?: CassettesSettings;
   repository?: CassetteRepository;
   verifier?: AccessTokenVerifier;
   clock?: () => string;
+  authorizeAudio?: MediaAuthorizer;
 }
 
 export function createCassettesRouter(options: CassetteApiOptions = {}) {
@@ -31,7 +33,7 @@ export function createCassettesRouter(options: CassetteApiOptions = {}) {
   const verifier = options.verifier ?? cachedAccessTokenVerifier(settings.userPoolId!, settings.clientId!);
   const repository = options.repository ?? (settings.storageMode === 'memory' ? createMemoryCassetteRepository() : createDynamoCassetteRepository(settings.tableName!));
   const context = `${settings.region}:${settings.userPoolId}:${settings.clientId}:${settings.storageMode}:${settings.tableName ?? 'local'}`;
-  const service = createCassettesService(repository, createCassetteCursor(settings.cursorSecret!, context), options.clock);
+  const service = createCassettesService(repository, createCassetteCursor(settings.cursorSecret!, context), options.clock, options.authorizeAudio);
   router.use(cassetteAuth(verifier));
   const parse = express.json({ limit: '300kb', strict: true });
   router.use((req, res, next) => parse(req, res, (error: unknown) => {

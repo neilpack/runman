@@ -192,7 +192,9 @@ resolution keeps context-scoped cassette auth/drafts and restores editor focus
 without resetting the selected tape on each edit. Explore `source: community`
 tracks are retained in local drafts; cloud save returns an explicit validation
 issue until their public-song persistence contract is added. Do not silently drop
-them or reinterpret them as Jamendo/private uploads. Private uploaded/recorded
-tracks are still refused by the server pending ownership/existence authorization.
-Review the upstream public Explore S3 prefix separately from private audio paths
-before starting S3 integration. The separate audio-storage worktree is unchanged.
+them or reinterpret them as Jamendo/private uploads. The subsequent
+[S3 checkpoint 2](S3_IMPLEMENTATION.md) adds private-reference authorization for
+configured backends; frontend upload wiring and manual deployment remain pending.
+Private audio uses a separate bucket from public Explore. The separate
+audio-storage worktree is unchanged. Earlier checkpoint notes above describe the
+database-only implementation before this integration.

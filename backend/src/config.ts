@@ -24,6 +24,16 @@ export function readConfig(env: NodeJS.ProcessEnv) {
       tableName: env.CASSETTES_TABLE,
       cursorSecret: env.CASSETTE_CURSOR_SECRET,
     },
+    media: {
+      storageMode: env.MEDIA_STORAGE_MODE ?? 'disabled',
+      cassetteStorageMode: env.CASSETTE_STORAGE_MODE ?? 'disabled',
+      region: env.AWS_REGION ?? 'us-east-1',
+      userPoolId: env.COGNITO_USER_POOL_ID,
+      clientId: env.COGNITO_USER_POOL_CLIENT_ID,
+      tableName: env.CASSETTES_TABLE,
+      bucket: env.PRIVATE_AUDIO_BUCKET,
+      publicBucket: env.UPLOADS_BUCKET,
+    },
     aws: {
       region: env.AWS_REGION ?? 'us-east-1',
       itemsTable: env.ITEMS_TABLE || undefined,
@@ -45,3 +55,4 @@ export function readConfig(env: NodeJS.ProcessEnv) {
 
 export const config = readConfig(process.env);
 export type CassettesSettings = ReturnType<typeof readConfig>['cassettes'];
+export type MediaSettings = ReturnType<typeof readConfig>['media'];

@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "test:media": "tsc -p shared/tsconfig.test.json && tsx --tsconfig shared/tsconfig.test.json --test shared/tests/media.test.ts",
+    "test:media-api": "tsc -p backend/tsconfig.test.json && tsx --tsconfig backend/tsconfig.test.json --test backend/tests/mediaService.test.ts backend/tests/mediaRepository.test.ts backend/tests/mediaHttp.test.ts backend/tests/privateMediaStorage.test.ts",
     "package:backend": "npm run build -w backend && node scripts/package-backend.mjs",
     "test:deployment": "node --test scripts/tests/package-backend.test.mjs",
     "dev": "concurrently -n api,web -c blue,magenta \"npm run dev -w backend\" \"npm run dev -w frontend\"",

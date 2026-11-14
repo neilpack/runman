@@ -29,5 +29,8 @@ for (const [method, path] of [['GET', '/api/cassettes'], ['PUT', '/api/cassettes
   assert.equal((await request(method, path)).statusCode, 401, `${method} cassette request must require authentication`);
 }
 assert.equal((await request('GET', '/api/cassettes', { authorization: 'Bearer malformed-offline-token' })).statusCode, 401);
+for (const path of ['/api/media/uploads', '/api/media/complete', '/api/media/playback']) {
+  assert.equal((await request('POST', path)).statusCode, 401, 'Configured private media must authenticate before any S3 or DynamoDB work');
+}
 assert.equal(networkAttempts, 0);
-console.log('Offline uploaded-bundle smoke passed: health 200, cassettes 401, legacy methods 404; no network.');
+console.log('Offline uploaded-bundle smoke passed: health 200, cassettes/media 401, legacy methods 404; no network.');

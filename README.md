@@ -35,7 +35,7 @@ Built for **iHack 2026** (BYU-Idaho CSE Department Computing Society) — Theme:
 | Music library | Jamendo API (Creative Commons music) |
 | Backend | Retained Express local examples; private APIs are separate work |
 | Database | DynamoDB originally planned; outside this authentication checkpoint |
-| File storage (recordings, uploads) | Separate audio work; no implementation in this chat |
+| File storage (recordings, uploads) | Private S3 backend implemented; frontend/deployment pending, see S3 handoff |
 | Auth | Standalone Cognito user pool + public SPA client; branded forms using Amplify Auth SDK |
 | Hosting | Static build only; Learner Lab hosting permissions not yet confirmed |
 
@@ -163,7 +163,8 @@ tape editor, **Save to account** calls the Cognito-protected cassette API; edits
 otherwise remain local drafts scoped by account. The library loads saved tapes,
 offers pagination, and copies only explicitly selected old browser/guest tapes
 into new account drafts. Conflicts preserve edits and offer confirmed reload or
-a new copy. Recordings remain local until cloud audio authorization integrates.
+a new copy. Recordings currently remain local. The private S3 backend is implemented;
+frontend wiring and manual deployment are pending. See [the S3 handoff](S3_IMPLEMENTATION.md).
 
 For durable saves, create the DynamoDB table yourself and configure the backend
 using [the console setup guide](DATABASE_CONSOLE_SETUP.md). Cassette API storage
