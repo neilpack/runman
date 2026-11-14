@@ -67,6 +67,12 @@ export interface Sticker {
 
 export type TapeSide = 'A' | 'B';
 
+/**
+ * Who can see a cassette or an uploaded song. Missing means 'private' (everything saved before
+ * this field existed). Public content is pushed to AWS when the listener leaves the editor.
+ */
+export type Visibility = 'private' | 'public';
+
 export interface Track {
   id: string;
   /** Original ID from the external music source, when applicable. */
@@ -86,6 +92,8 @@ export interface Track {
   audioReference?: StoredAudioReference;
   artworkUrl?: string;
   licenseUrl?: string;
+  /** Only meaningful for your own audio ('upload' / 'recording'); defaults to private. */
+  visibility?: Visibility;
 }
 
 /** The parts of a cassette's look that can differ between side A and side B. */
@@ -112,6 +120,8 @@ export interface Cassette {
    */
   sideB?: Partial<SideLook>;
   tracks: Track[];
+  /** Public tapes can be viewed and added by anyone. Defaults to private. */
+  visibility?: Visibility;
   createdAt: string;
   updatedAt: string;
 }

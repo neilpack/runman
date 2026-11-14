@@ -1,5 +1,5 @@
 // Edit / create a cassette: colours, label text + pen style, shell type, stickers, tracklist.
-// Edits persist as local drafts; account saves are explicit.
+// Edits persist locally immediately and sync to the account automatically.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -11,6 +11,8 @@ import { ColorPicker } from '@/components/cassette/ColorPicker';
 import { FlippableFace } from '@/components/cassette/FlippableFace';
 import { StickerIcon } from '@/components/cassette/StickerIcon';
 import { TrackList } from '@/components/cassette/TrackList';
+import { VisibilitySwitch } from '@/components/cassette/VisibilitySwitch';
+import { removePublicContent, snapshotVisibility, syncPublicContent, visibilityOf } from '@/api/publicSync';
 import {
   INK_COLORS,
   LABEL_COLORS,
@@ -24,6 +26,7 @@ import {
 import { faceFor, patchSide, sideBHasOwnStyle, sideLook } from '@/components/cassette/sides';
 import { cassetteStore, newId, useCassette, useCassetteSync } from '@/hooks/useCassettes';
 import { CassetteSaveControls } from '@/components/cassette/CassetteSaveControls';
+import { createEditorSaver } from '@/cassettes/editorSaver';
 import { useOrbit } from '@/hooks/useOrbit';
 import type { LibraryLocationState } from './LibraryPage';
 import './editor.css';
@@ -58,7 +61,8 @@ export function EditCassettePage() {
   }
 
   // The library puts this tape on the pedestal when it opens (if it still exists).
-  const backToLibrary = () => navigate('/library', { state: { focusId: cassette.id } satisfies LibraryLocationState });
+  const backToLibrary = (cassetteSaved = false) => navigate('/library', { state: { focusId: cassette.id, cassetteSaved } satisfies LibraryLocationState });
+  // Keyed per account context and tape so each tape gets its own editor (and its own on-exit public sync).
   return <Editor key={`${sync.context}:${cassette.id}`} cassette={cassette} onDone={backToLibrary} />;
 }
 
@@ -105,10 +109,23 @@ function Swatches({
   );
 }
 
-function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }) {
+function Editor({ cassette, onDone }: { cassette: Cassette; onDone: (cassetteSaved?: boolean) => void }) {
   const sync = useCassetteSync();
   const tapeSync = sync.tapes[cassette.id];
   const busy = Boolean(tapeSync?.saving || tapeSync?.deleting || tapeSync?.reloading);
+  const [finishing, setFinishing] = useState(false);
+  const [saver] = useState(() => createEditorSaver(cassetteStore, cassette.id, sync.context));
+  useEffect(() => {
+    if (sync.status !== 'authenticated' || !tapeSync?.dirty || tapeSync.error || tapeSync.conflict || tapeSync.cloudMissing) return;
+    const timer = window.setTimeout(() => { void saver(); }, 600);
+    return () => window.clearTimeout(timer);
+  }, [cassette, sync.status, tapeSync?.dirty, tapeSync?.error, tapeSync?.conflict, tapeSync?.cloudMissing, saver]);
+  const finish = async () => {
+    setFinishing(true);
+    const saved = await saver();
+    setFinishing(false);
+    if (saved && cassetteStore.getSync().context === sync.context) onDone(true);
+  };
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [side, setSide] = useState<TapeSide>('A');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -127,6 +144,25 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
 
   const currentContext = () => cassetteStore.getSync().context === sync.context;
   const update = (patch: Partial<Cassette>) => { if (currentContext()) cassetteStore.update(cassette.id, patch); };
+
+  // ---- Public sharing: pushed to AWS once, when the editor closes ----
+  // However the listener leaves (Done, ← Library, the nav bar, browser back), the editor unmounts
+  // and syncPublicContent() uploads anything now public and takes down anything made private.
+  const latest = useRef(cassette);
+  latest.current = cassette;
+  const openedWith = useRef(snapshotVisibility(cassette));
+  const deleted = useRef(false);
+  const exitTimer = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    // StrictMode (dev) unmounts and remounts straight away; cancel that fake exit's sync.
+    window.clearTimeout(exitTimer.current);
+    return () => {
+      exitTimer.current = window.setTimeout(() => {
+        if (deleted.current) return;
+        void syncPublicContent(openedWith.current, latest.current);
+      }, 0);
+    };
+  }, []);
 
   // Label colour, ink, pen style and stickers belong to the side currently shown.
   const look = sideLook(cassette, side);
@@ -269,22 +305,33 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
     const context = sync.context;
     if (cassetteStore.getSync().context !== context) return;
     setConfirmingDelete(false);
-    if (await cassetteStore.remove(cassette.id) && cassetteStore.getSync().context === context) onDone();
+    const id = cassette.id;
+    // Set before removing: a successful remove unmounts the editor, and its on-exit
+    // public sync must not re-publish the tape we're deleting.
+    deleted.current = true;
+    const removed = await cassetteStore.remove(id);
+    if (!removed) {
+      // Delete failed (e.g. cloud error) — the editor stays open, so keep the on-exit sync.
+      deleted.current = false;
+      return;
+    }
+    // Only what was public when the editor opened has reached AWS; take that down.
+    void removePublicContent(id, openedWith.current);
+    if (cassetteStore.getSync().context === context) onDone();
   };
 
   return (
     <div className="studio editor workbench">
       <div className="editor-top">
-        <Link to="/library" className="studio-btn">
+        <button type="button" className="studio-btn" disabled={finishing || Boolean(tapeSync?.deleting || tapeSync?.reloading)} onClick={() => void finish()}>
           ← Library
-        </Link>
-        <span className="studio-muted editor-saved">Edits stay in a local draft</span>
+        </button>
         <div className="row">
           <button type="button" className="studio-btn danger" disabled={busy} onClick={() => setConfirmingDelete(true)}>
             Delete
           </button>
-          <button type="button" className="studio-btn primary" onClick={onDone}>
-            Done
+          <button type="button" className="studio-btn primary" disabled={finishing || Boolean(tapeSync?.deleting || tapeSync?.reloading)} onClick={() => void finish()}>
+            {finishing ? 'Saving...' : 'Done'}
           </button>
         </div>
       </div>
@@ -462,6 +509,27 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
                   />
                 ))}
               </div>
+            </div>
+          </div>
+
+          {/* ---- Cassette settings: who can see this tape ---- */}
+          <div className="side-block settings-block">
+            <div className="side-block-head">
+              <span>Cassette settings</span>
+            </div>
+            <div className="field">
+              <span className="field-label">Visibility</span>
+              <VisibilitySwitch
+                label="Cassette visibility"
+                value={visibilityOf(cassette)}
+                onChange={(visibility) => update({ visibility })}
+              />
+              <p className="settings-note studio-muted">
+                {visibilityOf(cassette) === 'public'
+                  ? 'Anyone can view this tape and add it to their library'
+                  : 'Only you can see this tape'}{' '}
+                {/* Your uploaded songs stay private unless you make them public from the ⋮⋮ menu in the tracklist. */}
+              </p>
             </div>
           </div>
         </section>
