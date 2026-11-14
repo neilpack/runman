@@ -44,6 +44,14 @@ test('recording keeps final chunks and actual codec, then releases the microphon
   assert.equal(h.recorder.ondataavailable, null);
 });
 
+test('recorded duration uses elapsed capture time and excludes delayed finalization after Stop', async () => {
+  const h = harness(); let clock = 1000;
+  const recording = await recordAudio(h.controller.signal, undefined, { ...h.deps, now: () => clock });
+  clock += 5500; recording.stop();
+  clock += 10_000; h.emit(new Blob(['audio'])); h.finish(); await recording.result;
+  assert.equal(recording.durationSec, 5.5);
+});
+
 test('repeated stop is harmless while final data is pending', async () => {
   const h = harness();
   const recording = await recordAudio(h.controller.signal, undefined, h.deps);
