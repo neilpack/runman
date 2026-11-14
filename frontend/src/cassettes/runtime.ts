@@ -25,7 +25,7 @@ export const cassetteStore = createCassetteStore({
   api: api.cassettes,
   storage: { getItem: (key) => window.localStorage.getItem(key), setItem: (key, value) => window.localStorage.setItem(key, value) },
   namespace: `${cognito?.userPoolId ?? 'unconfigured'}:${cognito?.userPoolClientId ?? 'unconfigured'}`,
-  newId, now: () => new Date().toISOString(), seed,
+  newId, now: () => new Date().toISOString(), seed, communityAudioUrl: api.publicSongAudioUrl,
 });
 
 let started = false;

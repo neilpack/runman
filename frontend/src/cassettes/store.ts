@@ -13,7 +13,7 @@ export interface CassetteSyncSnapshot {
 interface Draft { cassette: Cassette; baseline: CassetteDocument | null; conflict: boolean; cloudMissing: boolean; remoteRevision?: number }
 interface Model extends Draft { saving: boolean; deleting: boolean; reloading: boolean; error: string | null; issues?: CassetteValidationIssue[]; version: number; localFingerprint: string; baselineFingerprint: string | null }
 interface Storage { getItem(key: string): string | null; setItem(key: string, value: string): void }
-interface Dependencies { api: CassetteApi; storage: Storage; namespace: string; newId(): string; now(): string; seed?(): Cassette[] }
+interface Dependencies { api: CassetteApi; storage: Storage; namespace: string; newId(): string; now(): string; seed?(): Cassette[]; communityAudioUrl?(songId: string): string }
 const LEGACY_KEY = 'runman.cassettes.v1';
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical);
@@ -150,7 +150,7 @@ export function createCassetteStore(deps: Dependencies) {
   function controller() { const value = new AbortController(); requests.add(value); return value; }
   function current(ticket: number, subject: string) { return epoch === ticket && status === 'authenticated' && owner === subject; }
   function decoded(document: CassetteDocument, expectedId?: string) {
-    const restored = cassetteFromDocument(document);
+    const restored = cassetteFromDocument(document, { communityAudioUrl: deps.communityAudioUrl });
     if (!restored.ok || (expectedId !== undefined && document.payload.id !== expectedId)) throw new Error('The cloud returned invalid cassette data. Local changes were kept.');
     return restored.value.cassette;
   }

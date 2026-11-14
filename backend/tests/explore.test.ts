@@ -143,7 +143,7 @@ test('S3 source caches listings, skips bad manifests and never caches failures',
 });
 
 async function serve(t: TestContext) {
-  const service = createExploreService(createStaticSource('demo', { songs: demoSongs(NOW), profiles: demoProfiles() }), () => NOW);
+  const service = createExploreService(createStaticSource('demo', { songs: demoSongs(NOW), profiles: demoProfiles(), tapes: [] }), () => NOW);
   const app = express();
   app.use('/api/explore', createExploreRouter(service));
   app.use(notFound);

@@ -1,9 +1,14 @@
-import type { Cassette, StoredAudioReference, TapeSide, Track } from './index.js';
+import type { Cassette, StoredAudioReference, TapeSide, Track, Visibility } from './index.js';
 
-interface PersistedTrackDetails extends Omit<Track, 'source' | 'audioUrl' | 'audioReference'> {}
+interface PersistedTrackDetails extends Omit<Track, 'source' | 'audioUrl' | 'audioReference' | 'visibility'> {}
 export type PersistedCassetteTrack =
   | (PersistedTrackDetails & { source: 'library'; provider: 'jamendo'; sourceId: string; audioUrl?: string })
-  | (PersistedTrackDetails & { source: 'upload' | 'recording'; provider: 's3'; audio: StoredAudioReference });
+  /**
+   * A public Explore song. Its stable audio URL depends on the API origin, so only `hasAudio`
+   * is stored and the client rebuilds the URL from `sourceId` on restore.
+   */
+  | (PersistedTrackDetails & { source: 'community'; provider: 'explore'; sourceId: string; hasAudio: boolean })
+  | (PersistedTrackDetails & { source: 'upload' | 'recording'; provider: 's3'; audio: StoredAudioReference; visibility?: Visibility });
 
 /** Preserve absent sideB fields exactly; never flatten side B's inherited look. */
 export interface CassettePayload extends Omit<Cassette, 'tracks' | 'createdAt' | 'updatedAt'> {
@@ -36,6 +41,10 @@ export interface DeleteCassetteResponse { id: string; deletedRevision: number }
 /** Legacy callers can supply durable references separately from the UI track. */
 export type CassetteAudioReferences = Partial<Record<TapeSide, Record<string, StoredAudioReference>>>;
 export interface RestoredCassette { cassette: Cassette; audioReferences: CassetteAudioReferences }
+export interface RestoreCassetteOptions {
+  /** Stable playback URL for a community (Explore) song, e.g. the API's /api/explore/songs/:id/audio. */
+  communityAudioUrl?(songId: string): string;
+}
 
 export interface CassetteValidationIssue { path: string; message: string }
 export type CassetteValidationResult<T> =

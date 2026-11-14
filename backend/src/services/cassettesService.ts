@@ -22,7 +22,7 @@ export function createCassettesService(repository: CassetteRepository, cursor: R
   }
   async function authorize(owner: string, payloads: CassettePayload[]) {
     const unique = new Map<string, StoredAudioReference>();
-    for (const payload of payloads) for (const track of payload.tracks) if (track.source !== 'library') {
+    for (const payload of payloads) for (const track of payload.tracks) if (track.provider === 's3') {
       const previous = unique.get(track.audio.objectKey);
       if (previous && (previous.source !== track.audio.source || previous.contentType !== track.audio.contentType || previous.sizeBytes !== track.audio.sizeBytes)) throw new HttpError(422, 'Conflicting metadata for the same private audio object.');
       unique.set(track.audio.objectKey, track.audio);
@@ -89,7 +89,7 @@ export function createCassettesService(repository: CassetteRepository, cursor: R
         let truncated = false;
         for (const item of page.items) {
           const document = publicDocument(item);
-          const keys = document.payload.tracks.flatMap((track) => track.source === 'library' ? [] : [track.audio.objectKey]);
+          const keys = document.payload.tracks.flatMap((track) => track.provider === 's3' ? [track.audio.objectKey] : []);
           const added = new Set(keys.filter((key) => !mediaKeys.has(key)));
           // Bound total Dynamo/HEAD work as well as parallelism. The first
           // cassette always fits because the shared track cap is 100.

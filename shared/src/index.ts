@@ -5,6 +5,9 @@ export * from './cassetteValidation.js';
 export * from './cassetteAdapters.js';
 export * from './mediaPersistence.js';
 export * from './mediaValidation.js';
+export * from './profilePersistence.js';
+export * from './explorePublishing.js';
+import type { PublicTape } from './explorePublishing.js';
 
 /** Persist only after upload succeeds. Playback URLs are temporary browser state. */
 export interface StoredAudioReference {
@@ -199,10 +202,11 @@ export interface PublicProfile {
 /**
  * Where Explore data came from:
  * - 's3': public songs/profiles in the uploads bucket
+ * - 'dynamodb': songs, tapes and profiles listeners published (see explorePublishing.ts)
  * - 'demo': built-in sample data (local dev with no bucket configured)
  * - 'empty': deployed without a bucket, so nothing to show
  */
-export type ExploreCatalog = 's3' | 'demo' | 'empty';
+export type ExploreCatalog = 's3' | 'dynamodb' | 'demo' | 'empty';
 
 /** A song a listener uploaded and made public. */
 export interface PublicSong {
@@ -249,5 +253,7 @@ export interface ListenerSearchResponse {
 export interface ListenerProfileResponse {
   profile: PublicProfile;
   songs: PublicSong[];
+  /** Tapes this listener published, newest first. */
+  tapes: PublicTape[];
   catalog: ExploreCatalog;
 }

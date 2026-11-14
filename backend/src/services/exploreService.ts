@@ -1,9 +1,9 @@
 // Explore: songs listeners made public, plus listener profiles (username, avatar, tape on display).
 //
-// Data source, chosen at startup:
-//   UPLOADS_BUCKET set ........ S3 (below). Read-only here; the "make public" flow writes it.
-//   unset, local dev .......... built-in sample data (exploreDemoData.ts)
-//   unset, deployed ........... empty catalog
+// Data source, chosen at startup (routes/explore.ts createExploreApi):
+//   cassette storage dynamodb .. the published catalog in the cassettes table (createCatalogSource)
+//   cassette storage memory .... in-memory catalog plus the sample data (local dev)
+//   otherwise: UPLOADS_BUCKET set -> S3 manifests below (read-only); local dev -> sample data; else empty
 //
 // S3 layout (the contract for whatever publishes songs/profiles):
 //   public/songs/<songId>/song.json    SongManifest: metadata for one public song
@@ -26,16 +26,20 @@ import type {
   PublicProfile,
   PublicSong,
   PublicSongPage,
+  PublicTape,
+  PublicTapePage,
+  PublicTapeResponse,
   ShellType,
   SideLook,
   Sticker,
   TapeSnapshot,
   TrendingSongsResponse,
 } from '@runman/shared';
-import { sanitizeCustomStickers } from '@runman/shared';
+import { parseMediaObjectKey, sanitizeCustomStickers } from '@runman/shared';
 import { getDownloadUrl, getObjectText, listObjectKeys } from '../aws/s3.js';
 import { config } from '../config.js';
 import { demoProfiles, demoSongs } from './exploreDemoData.js';
+import type { PublicCatalogRepository } from './publicCatalogRepository.js';
 
 export const TRENDING_COUNT = 5;
 export const PUBLIC_PREFIX = 'public/';
@@ -62,6 +66,8 @@ export interface SongRecord {
 export interface ExploreSnapshot {
   songs: SongRecord[];
   profiles: PublicProfile[];
+  /** Published tapes. Only the DynamoDB catalog has any. */
+  tapes: PublicTape[];
 }
 
 export interface ExploreSource {
@@ -305,6 +311,26 @@ export function trendingSongs(songs: SongRecord[], now: Date, count = TRENDING_C
     .map((s) => s.song);
 }
 
+/** Tapes matching every word of `q` in the name, owner or track titles/artists; newest first. */
+export function searchTapes(tapes: PublicTape[], q: string, usernameOf: (t: PublicTape) => string): PublicTape[] {
+  const words = tokens(q);
+  const newestTape = (a: PublicTape, b: PublicTape) => b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id);
+  if (words.length === 0) return [...tapes].sort(newestTape);
+  const scored = tapes.flatMap((tape) => {
+    const name = fold(tape.tape.name);
+    const owner = fold(usernameOf(tape));
+    const songs = fold(tape.tape.tracks.map((t) => `${t.title} ${t.artist}`).join(' '));
+    let score = 0;
+    for (const word of words) {
+      const best = Math.max(hit(name, word) * 3, hit(owner, word) * 2, hit(songs, word));
+      if (best === 0) return [];
+      score += best;
+    }
+    return [{ tape, score }];
+  });
+  return scored.sort((a, b) => b.score - a.score || newestTape(a.tape, b.tape)).map((s) => s.tape);
+}
+
 export function searchListeners(listeners: ListenerSummary[], q: string): ListenerSummary[] {
   const needle = fold(q.trim().replace(/^@/, ''));
   const byActivity = (a: ListenerSummary, b: ListenerSummary) =>
@@ -331,7 +357,7 @@ export function createExploreService(source: ExploreSource, now: () => Date = ()
 
   /** Profiles by user id. Uploaders without a profile file still get a page (no avatar/tape). */
   async function load() {
-    const { songs, profiles } = await source.snapshot();
+    const { songs, profiles, tapes } = await source.snapshot();
     const byUser = new Map<string, PublicProfile>(profiles.map((p) => [p.userId, p]));
     for (const song of songs) {
       if (!byUser.has(song.uploaderId)) {
@@ -356,7 +382,8 @@ export function createExploreService(source: ExploreSource, now: () => Date = ()
       addCount: s.addCount,
       publishedAt: s.publishedAt,
     });
-    return { songs, byUser, usernameOf, toPublic };
+    const withOwnerName = (t: PublicTape): PublicTape => ({ ...t, owner: { ...t.owner, username: byUser.get(t.owner.userId)?.username ?? t.owner.username } });
+    return { songs, tapes: tapes.map(withOwnerName), byUser, usernameOf, toPublic };
   }
 
   return {
@@ -390,12 +417,25 @@ export function createExploreService(source: ExploreSource, now: () => Date = ()
 
     /** Case-insensitive username lookup. */
     async listener(username: string): Promise<ListenerProfileResponse | undefined> {
-      const { songs, byUser, toPublic } = await load();
+      const { songs, tapes, byUser, toPublic } = await load();
       const wanted = username.toLowerCase();
       const profile = [...byUser.values()].find((p) => p.username.toLowerCase() === wanted);
       if (!profile) return undefined;
       const theirs = newestFirst(songs.filter((s) => s.uploaderId === profile.userId)).map(toPublic);
-      return { profile, songs: theirs, catalog };
+      const theirTapes = searchTapes(tapes.filter((t) => t.owner.userId === profile.userId), '', () => profile.username);
+      return { profile, songs: theirs, tapes: theirTapes, catalog };
+    },
+
+    async tapes(input: { q: string; limit: number; offset: number }): Promise<PublicTapePage> {
+      const { tapes } = await load();
+      const matches = searchTapes(tapes, input.q, (t) => t.owner.username);
+      return { tapes: matches.slice(input.offset, input.offset + input.limit), total: matches.length, offset: input.offset, limit: input.limit, catalog };
+    },
+
+    async tape(id: string): Promise<PublicTapeResponse | undefined> {
+      const { tapes } = await load();
+      const tape = tapes.find((t) => t.id === id);
+      return tape ? { tape, catalog } : undefined;
     },
 
     /** A short-lived playable URL for the song's audio, or undefined if it has none. */
@@ -466,6 +506,7 @@ export function createS3Source(s3: S3Access, options: { ttlMs?: number; now?: ()
     return {
       songs: songs.filter((s): s is SongRecord => Boolean(s)),
       profiles: profiles.filter((p): p is PublicProfile => Boolean(p)),
+      tapes: [],
     };
   }
 
@@ -495,14 +536,63 @@ export function createStaticSource(catalog: ExploreCatalog, snapshot: ExploreSna
   };
 }
 
-function chooseSource(): ExploreSource {
+/** Plays a published song's private audio via the owner-checked media service. */
+export type CatalogPlayback = (owner: string, mediaId: string) => Promise<string>;
+
+/**
+ * Explore backed by what listeners published (publicCatalogRepository.ts). Rows are cached briefly;
+ * call `invalidate()` after a write so the author sees their change straight away.
+ * `extra` (local dev only) mixes in the built-in sample catalog.
+ */
+export function createCatalogSource(
+  repository: PublicCatalogRepository,
+  options: { catalog: ExploreCatalog; playback?: CatalogPlayback; extra?: Omit<ExploreSnapshot, 'tapes'>; ttlMs?: number; now?: () => number },
+): ExploreSource & { invalidate(): void } {
+  const ttlMs = options.ttlMs ?? 15_000;
+  const clock = options.now ?? Date.now;
+  let cache: { at: number; value: Promise<ExploreSnapshot> } | undefined;
+  async function fetchSnapshot(): Promise<ExploreSnapshot> {
+    const [songs, profiles, tapes] = await Promise.all([repository.listSongs(), repository.listProfiles(), repository.listTapes()]);
+    return {
+      songs: [
+        ...(options.extra?.songs ?? []),
+        ...songs.map((s): SongRecord => ({
+          id: s.id, title: s.title, artist: s.artist, durationSec: s.durationSec, uploaderId: s.ownerId, uploaderUsername: s.uploaderUsername,
+          // A private media key. Only this source presigns it, through the owner-checked media service.
+          audioKey: s.audio.objectKey, artworkUrl: s.artworkUrl, addCount: s.addCount, publishedAt: s.publishedAt,
+        })),
+      ],
+      profiles: [...(options.extra?.profiles ?? []), ...profiles.map(({ updatedAt: _updatedAt, ...profile }) => profile)],
+      tapes,
+    };
+  }
+  return {
+    catalog: options.catalog,
+    snapshot() {
+      const at = clock();
+      if (!cache || at - cache.at >= ttlMs) {
+        const value = fetchSnapshot();
+        cache = { at, value };
+        value.catch(() => { if (cache?.value === value) cache = undefined; });
+      }
+      return cache.value;
+    },
+    async audioUrl(song) {
+      const selector = song.audioKey ? parseMediaObjectKey(song.audioKey) : undefined;
+      if (!selector || selector.owner !== song.uploaderId || !options.playback) return undefined;
+      return options.playback(song.uploaderId, selector.mediaId);
+    },
+    invalidate() { cache = undefined; },
+  };
+}
+
+/** Explore without published data: the uploads bucket, the local sample catalog, or nothing. */
+export function defaultExploreSource(): ExploreSource {
   if (config.aws.uploadsBucket) {
     return createS3Source({ list: (p) => listObjectKeys(p), read: (k) => getObjectText(k), presign: getDownloadUrl });
   }
   if (config.explore.demoCatalog) {
-    return createStaticSource('demo', { songs: demoSongs(new Date()), profiles: demoProfiles() });
+    return createStaticSource('demo', { songs: demoSongs(new Date()), profiles: demoProfiles(), tapes: [] });
   }
-  return createStaticSource('empty', { songs: [], profiles: [] });
+  return createStaticSource('empty', { songs: [], profiles: [], tapes: [] });
 }
-
-export const exploreService = createExploreService(chooseSource());
