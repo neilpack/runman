@@ -1,99 +1,202 @@
-# runman
+# RunMan
 
-> One-line pitch goes here: what runman does and who it's for.
+**A re-invented portable cassette player for the web.** Design your own cassettes, fill them with tracks or your own recordings, and drag them into RunMan to listen.
 
-Hackathon project. React frontend + Node/Express backend on AWS (Lambda, API Gateway, DynamoDB, S3).
+Built for **iHack 2026** (BYU-Idaho CSE Department Computing Society) — Theme: *Re-Invent*, Category: **Innovating Yesterday**.
 
-## Quick start
+---
 
-Requires Node 22+.
+## Features
+
+- **Cassette library:** a shelf of cassette tapes you can drag and drop into the RunMan player to listen.
+- **Custom tracks:** search a music library API and add tracks to your cassettes.
+- **Cassette styling:** color, add stickers, and label each cassette however you like.
+- **Recording:** record your own audio onto a cassette with your microphone.
+
+### Stretch goals
+
+- Side A / Side B with tape flipping
+- Tape length limits (e.g., C60 = 30 minutes per side)
+- Shareable mixtape links
+- J-card liner notes
+- Analog effects (rewind/fast-forward sounds, tape hiss, wow and flutter)
+
+---
+
+## Tech Stack
+
+| Layer | Tool |
+|---|---|
+| Frontend | React + Vite |
+| Drag and drop | dnd-kit |
+| Cassette visuals | SVG components; react-konva for stickers |
+| Audio playback and effects | Web Audio API (Howler.js optional) |
+| Recording | MediaRecorder API |
+| Music library | Jamendo API (Creative Commons music) |
+| Backend | AWS Amplify Gen 2 |
+| Database | Amazon DynamoDB |
+| File storage (recordings, uploads) | Amazon S3 |
+| Auth (optional) | Amazon Cognito |
+| Hosting | AWS Amplify Hosting |
+
+---
+
+## Prerequisites
+
+Every team member needs:
+
+- [Node.js (LTS)](https://nodejs.org/)
+- [Git](https://git-scm.com/downloads)
+- [VS Code](https://code.visualstudio.com/) (recommended), with [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) and [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)
+- [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
+- Chrome or Edge (for DevTools and microphone support)
+
+Accounts:
+
+- A GitHub account with access to this repo
+- AWS access on the team account (IAM or IAM Identity Center user — don't share the root login)
+- Jamendo client ID (one per team) from the [Jamendo developer portal](https://devportal.jamendo.com/)
+
+Verify your setup:
 
 ```bash
+node -v
+git --version
+aws --version
+```
+
+---
+
+## Getting Started
+
+### 1. Clone and install
+
+```bash
+git clone <repo-url>
+cd runman
 npm install
+```
+
+### 2. Configure AWS credentials
+
+```bash
+aws configure        # or: aws configure sso
+```
+
+See [Amplify Gen 2: Configure AWS for local development](https://docs.amplify.aws/react/start/account-setup/).
+
+### 3. Environment variables
+
+Create a `.env.local` file in the project root (do not commit it):
+
+```
+VITE_JAMENDO_CLIENT_ID=your_client_id_here
+```
+
+### 4. Start a personal cloud sandbox
+
+```bash
+npx ampx sandbox
+```
+
+This deploys your own temporary backend (DynamoDB, S3, etc.) so you don't affect teammates.
+
+### 5. Run the app
+
+```bash
 npm run dev
 ```
 
-- Frontend: http://localhost:5173
-- API: http://localhost:4000/api/health
+---
 
-No AWS account needed for local dev. Without `ITEMS_TABLE` set, the backend uses an in-memory store.
-
-## Repo layout
-
-```
-runman/
-├── frontend/            React 19 + Vite + TypeScript + React Router
-│   └── src/
-│       ├── pages/       One file per route (HomePage, DashboardPage, …)
-│       ├── components/  Reusable UI (Layout, Button, Card)
-│       ├── api/         Typed client for the backend
-│       ├── hooks/       Shared React hooks (useAsync)
-│       ├── styles/      global.css: design tokens + base styles
-│       └── router.tsx   Route table
-├── backend/             Express 5 API, runs locally or on AWS Lambda
-│   ├── src/
-│   │   ├── routes/      HTTP handlers (health, items)
-│   │   ├── services/    Business logic + storage (DynamoDB or in-memory)
-│   │   ├── aws/         AWS SDK v3 clients + S3 helpers
-│   │   ├── middleware/  Error handling
-│   │   ├── app.ts       Express app (shared by local + Lambda)
-│   │   ├── index.ts     Local dev server
-│   │   └── lambda.ts    Lambda handler
-│   └── template.yaml    AWS SAM: Lambda + HTTP API + DynamoDB + S3
-├── shared/              @runman/shared: API types used by both sides
-├── .claude/
-│   ├── agents/          Claude Code subagents
-│   └── skills/          Claude Code skills
-├── AGENTS.md            Conventions + subagent/skill docs for AI agents
-└── CLAUDE.md            Points Claude Code at AGENTS.md
-```
-
-## Scripts (run from root)
-
-| Command                | Description                                  |
-| ---------------------- | -------------------------------------------- |
-| `npm run dev`          | Run backend + frontend together              |
-| `npm run dev:frontend` | Frontend only                                |
-| `npm run dev:backend`  | Backend only                                 |
-| `npm run typecheck`    | Type-check every workspace                   |
-| `npm run build`        | Build Lambda bundle + frontend static site   |
-
-## Environment
-
-Copy the examples and fill them in. `.env` files are git-ignored.
+## Project Setup (already done — for reference)
 
 ```bash
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env.local
+npm create vite@latest runman -- --template react
+cd runman
+npm create amplify@latest
+npm install aws-amplify @aws-amplify/ui-react
+npm install @dnd-kit/core
+npm install konva react-konva
+npm install howler        # optional
 ```
 
-## AWS
+---
 
-### Using real AWS resources locally
+## Cassette Data Model
 
-1. Install the [AWS CLI](https://aws.amazon.com/cli/) and run `aws configure --profile runman`.
-2. In `backend/.env`, set `AWS_PROFILE=runman`, `AWS_REGION`, and `ITEMS_TABLE` / `UPLOADS_BUCKET`
-   (use the names from the deploy outputs below).
+Agreed shape for a cassette object, so everyone can build against it in parallel:
 
-### Deploying the backend
-
-Requires the [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html).
-
-```bash
-cd backend
-npm run sam:build
-npm run sam:deploy     # first time: guided, saves samconfig.toml
+```js
+{
+  id: "string",
+  label: "string",
+  colors: { shell: "#hex", label: "#hex" },
+  stickers: [{ id, src, x, y, rotation, scale }],
+  sideA: [{ id, title, artist, source: "jamendo" | "upload" | "recording", url, duration }],
+  sideB: [ /* same shape as sideA */ ]
+}
 ```
 
-The deploy prints `ApiUrl`. Set it as `VITE_API_URL` in the frontend, then
-`npm run build -w frontend` and host `frontend/dist/` anywhere static (S3 + CloudFront, Amplify, Vercel, …).
+---
 
-## Working with AI agents
+## Team Roles
 
-See [AGENTS.md](AGENTS.md) for the codebase conventions and the list of Claude subagents and skills.
+| Role | Responsibilities | Owner |
+|---|---|---|
+| Player + audio engine | Playback, controls, side flip, effects | |
+| Cassette designer | SVG cassette, colors, stickers, labels | |
+| Library + drag and drop + data | Shelf UI, DynamoDB save/load | |
+| Music sources + recording | Jamendo search, file upload, mic recording, deployment, pitch | |
 
-## Team
+---
 
-| Name | Area |
-| ---- | ---- |
-|      |      |
+## Event Timeline
+
+- **Fri, Nov 13 — 4:00 PM:** Registration opens
+- **Sat, Nov 14 — 4:00 PM:** Code submission
+- **Sat, Nov 14 — 4:00–6:00 PM:** Demonstration, judging, dinner
+- **Sat, Nov 14 — 7:00–8:00 PM:** Awards ceremony
+
+Location: Science and Technology Building, BYU-Idaho
+
+---
+
+## Resources
+
+### Frontend
+- [React docs](https://react.dev/)
+- [Vite docs](https://vite.dev/guide/)
+- [dnd-kit docs](https://docs.dndkit.com/)
+- [react-konva docs](https://konvajs.org/docs/react/)
+- [Howler.js](https://howlerjs.com/)
+
+### Browser audio
+- [Web Audio API (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
+- [MediaRecorder API (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder)
+- [getUserMedia (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia)
+
+### Music and sound
+- [Jamendo API v3.0 docs](https://developer.jamendo.com/v3.0/docs)
+- [Jamendo developer portal](https://devportal.jamendo.com/)
+- [Freesound API docs](https://freesound.org/docs/api/) (sound effects)
+
+### AWS
+- [AWS Amplify Gen 2 docs (React)](https://docs.amplify.aws/react/)
+- [Amplify Data (DynamoDB)](https://docs.amplify.aws/react/build-a-backend/data/)
+- [Amplify Storage (S3)](https://docs.amplify.aws/react/build-a-backend/storage/)
+- [Amplify Auth (Cognito)](https://docs.amplify.aws/react/build-a-backend/auth/)
+- [Amplify Hosting](https://docs.amplify.aws/react/deploy-and-host/)
+- [AWS Budgets](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-managing-costs.html) (set an alert to protect credits)
+
+---
+
+## Music Attribution
+
+Tracks from Jamendo are Creative Commons licensed, and each track has its own license terms. RunMan displays the artist name and license for every Jamendo track played.
+
+---
+
+## License
+
+TBD
