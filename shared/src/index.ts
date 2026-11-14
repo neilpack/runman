@@ -35,7 +35,11 @@ export type ShellType = 'solid' | 'clear' | 'retro';
 /** Font used for the handwritten label. Frontend maps these ids to font families. */
 export type PenStyle = 'handwritten' | 'marker' | 'script' | 'typewriter' | 'clean';
 
-export type StickerKind = 'heart' | 'star' | 'note' | 'smiley' | 'bolt' | 'disc' | 'flower' | 'sparkle';
+/**
+ * Sticker id: one of the built-in doodles ('heart', 'star', 'note', 'smiley', 'bolt', 'disc',
+ * 'flower', 'sparkle') or an icon sticker id from frontend/src/components/cassette/stickerLibrary.ts.
+ */
+export type StickerKind = string;
 
 export interface Sticker {
   id: string;

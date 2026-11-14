@@ -19,6 +19,7 @@ import {
   SHELL_TYPES,
   STICKER_COLORS,
   STICKER_KINDS,
+  stickerLabel,
 } from '@/components/cassette/constants';
 import { faceFor, patchSide, sideBHasOwnStyle, sideLook } from '@/components/cassette/sides';
 import { cassetteStore, newId, useCassette } from '@/hooks/useCassettes';
@@ -129,12 +130,12 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
     setSelectedId(null);
   };
 
-  const addSticker = (kind: StickerKind) => {
+  const addSticker = (kind: StickerKind, at?: { x: number; y: number }) => {
     const s: Sticker = {
       id: newId(),
       kind,
-      x: 20 + Math.random() * 60,
-      y: 25 + Math.random() * 30,
+      x: at ? Math.min(100, Math.max(0, at.x)) : 20 + Math.random() * 60,
+      y: at ? Math.min(100, Math.max(0, at.y)) : 25 + Math.random() * 30,
       rotation: Math.round(Math.random() * 40 - 20),
       scale: 1,
       color: stickerColor,
@@ -147,6 +148,46 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
     const r = faceRef.current!.getBoundingClientRect();
     return { x: ((clientX - r.left) / r.width) * 100, y: ((clientY - r.top) / r.height) * 100 };
   };
+
+  // ---- Drag a sticker from the tray onto the tape (a plain click still adds it at random) ----
+  const trayDrag = useRef<{ kind: StickerKind; startX: number; startY: number; pointerId: number; dragging: boolean } | null>(
+    null,
+  );
+  const suppressTrayClick = useRef(false);
+  const [ghost, setGhost] = useState<{ kind: StickerKind; x: number; y: number; over: boolean } | null>(null);
+
+  const overFace = (x: number, y: number) => {
+    const r = faceRef.current?.getBoundingClientRect();
+    return !!r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  };
+
+  const onTrayDown = (e: React.PointerEvent<HTMLButtonElement>, kind: StickerKind) => {
+    if (e.button !== 0) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    trayDrag.current = { kind, startX: e.clientX, startY: e.clientY, pointerId: e.pointerId, dragging: false };
+  };
+
+  const onTrayMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const d = trayDrag.current;
+    if (!d || d.pointerId !== e.pointerId) return;
+    if (!d.dragging && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < 6) return;
+    d.dragging = true;
+    setGhost({ kind: d.kind, x: e.clientX, y: e.clientY, over: overFace(e.clientX, e.clientY) });
+  };
+
+  const endTrayDrag = (e: React.PointerEvent<HTMLButtonElement>, drop: boolean) => {
+    const d = trayDrag.current;
+    if (!d || d.pointerId !== e.pointerId) return;
+    trayDrag.current = null;
+    if (!d.dragging) return; // a plain click: onClick adds it
+    setGhost(null);
+    // The browser may still fire a click for this press; ignore that one.
+    suppressTrayClick.current = true;
+    window.setTimeout(() => (suppressTrayClick.current = false), 0);
+    if (drop && overFace(e.clientX, e.clientY)) addSticker(d.kind, facePercent(e.clientX, e.clientY));
+  };
+
+  const ghostSize = ghost?.over && faceRef.current ? faceRef.current.getBoundingClientRect().width * 0.14 : 56;
 
   const onStickerPointerDown = (e: React.PointerEvent, s: Sticker) => {
     e.preventDefault();
@@ -207,7 +248,7 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
   };
 
   return (
-    <div className="studio editor">
+    <div className="studio editor workbench">
       <div className="editor-top">
         <Link to="/" className="studio-btn">
           ← Library
@@ -357,15 +398,23 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
             </div>
 
             <div className="field">
-              <span className="field-label">Doodle stickers · click to add to side {side}, drag on the tape to place</span>
+              <span className="field-label">Stickers · click or drag onto side {side}</span>
               <div className="sticker-tray">
                 {STICKER_KINDS.map((k) => (
                   <button
                     key={k}
                     type="button"
                     className="sticker-btn"
-                    onClick={() => addSticker(k)}
-                    aria-label={`Add ${k} sticker`}
+                    onClick={() => {
+                      if (suppressTrayClick.current) return;
+                      addSticker(k);
+                    }}
+                    onPointerDown={(e) => onTrayDown(e, k)}
+                    onPointerMove={onTrayMove}
+                    onPointerUp={(e) => endTrayDrag(e, true)}
+                    onPointerCancel={(e) => endTrayDrag(e, false)}
+                    aria-label={`Add ${stickerLabel(k)} sticker`}
+                    title={stickerLabel(k)}
                   >
                     <StickerIcon kind={k} color={stickerColor} />
                   </button>
@@ -410,7 +459,7 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
             </span>
           </div>
 
-          <div className="preview-frame" onPointerDown={() => setSelectedId(null)}>
+          <div className={`preview-frame${ghost?.over ? ' drop-target' : ''}`} onPointerDown={() => setSelectedId(null)}>
             <div className="preview-face">
               <FlippableFace
                 cassette={cassette}
@@ -463,11 +512,20 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
             <span className="studio-muted">Drag to spin</span>
           </div>
         </section>
-      </div>
 
-      <div className="editor-tracks">
+        {/* ---------------- Tracklist (right pane) ---------------- */}
         <TrackList cassette={cassette} side={side} onSideChange={setSide} onChange={(tracks) => update({ tracks })} />
       </div>
+
+      {ghost && (
+        <div
+          className={`sticker-ghost${ghost.over ? ' over' : ''}`}
+          style={{ left: ghost.x, top: ghost.y, width: ghostSize, height: ghostSize }}
+          aria-hidden="true"
+        >
+          <StickerIcon kind={ghost.kind} color={stickerColor} />
+        </div>
+      )}
 
       <ConfirmDialog
         open={confirmingDelete}

@@ -157,17 +157,24 @@
   align-items: center;
   gap: 12px;
   padding: 18px 30px;
-  border: 2px dashed rgba(255, 255, 255, 0.35);
-  border-radius: 20px;
-  background: rgba(24, 24, 27, 0.85);
-  color: var(--studio-text);
-  font-weight: 700;
+  border: 6px solid #175540;
+  border-radius: 16px;
+  /* a little green cutting mat: same workbench as the editor */
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1px) 0 0 / 16px 16px,
+    linear-gradient(90deg, rgba(255, 255, 255, 0.16) 1px, transparent 1px) 0 0 / 16px 16px,
+    #1e6a50;
+  box-shadow:
+    0 0 0 3px #6b4a2a,
+    0 18px 30px rgba(0, 0, 0, 0.5);
+  color: #eafff6;
+  font-family: var(--font-display);
   letter-spacing: 0.05em;
   white-space: nowrap;
   transform: translateY(180%);
   transition:
     transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
-    background 0.2s,
+    background-color 0.2s,
     border-color 0.2s;
 }
 
@@ -185,8 +192,8 @@
 
 .edit-pad.hover {
   transform: scale(1.1);
-  background: var(--studio-accent);
-  border-color: #fff;
+  background-color: #27875f;
+  border-color: #eafff6;
 }
 
 @media (max-width: 760px) {

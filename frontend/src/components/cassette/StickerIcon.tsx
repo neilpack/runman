@@ -1,4 +1,5 @@
 import type { StickerKind } from '@runman/shared';
+import { findIconSticker } from './stickerLibrary';
 
 interface StickerIconProps {
   kind: StickerKind;
@@ -14,8 +15,34 @@ const OUTLINE = {
   paintOrder: 'stroke' as const,
 };
 
+/**
+ * Accepts the SVG however it was pasted. If a full Reicon <svg> ended up wrapped inside
+ * stickerLibrary's outline() helper (an <svg> inside an <svg>), use just the inner one so the
+ * helper's stroke settings don't smear a filled icon.
+ */
+function normalizeSvg(svg: string): string {
+  const first = svg.indexOf('<svg');
+  const second = svg.indexOf('<svg', first + 4);
+  if (first === -1 || second === -1) return svg;
+  const end = svg.lastIndexOf('</svg>', svg.lastIndexOf('</svg>') - 1);
+  return end > second ? svg.slice(second, end + 6) : svg;
+}
+
 /** Die-cut style vector sticker (white outline + colour fill). */
 export function StickerIcon({ kind, color, className }: StickerIconProps) {
+  // Icon stickers (stickerLibrary.ts): pasted SVG coloured via currentColor.
+  const icon = findIconSticker(kind);
+  if (icon) {
+    return (
+      <span
+        className={`sticker-icon${className ? ` ${className}` : ''}`}
+        style={{ color }}
+        aria-hidden="true"
+        dangerouslySetInnerHTML={{ __html: normalizeSvg(icon.svg) }}
+      />
+    );
+  }
+
   let body: React.ReactNode;
   switch (kind) {
     case 'heart':

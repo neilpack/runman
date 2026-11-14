@@ -28,6 +28,7 @@ Run from the repo root.
 | `npm run dev`          | Backend on :4000 + frontend on :5173 together          |
 | `npm run typecheck`    | `tsc` across all workspaces. **Run before finishing a task.** |
 | `npm run build`        | Lambda bundle (`backend/dist/`) + frontend (`frontend/dist/`) |
+| `npm run sticker -- <name>` | Add a Reicon icon to the cassette sticker tray (`--filled`, `--search <term>`) |
 
 ## Conventions
 

@@ -15,6 +15,7 @@ import { CassetteDrawer } from '@/components/cassette/CassetteDrawer';
 import { CassettePlayer, type DeckControl } from '@/components/cassette/CassettePlayer';
 import { cassetteStore, useCassettes } from '@/hooks/useCassettes';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { playSfx } from '@/audio/sfx';
 import './library.css';
 
 type Zone = 'player' | 'edit' | 'drawer' | null;
@@ -209,6 +210,7 @@ export function LibraryPage() {
       const z = zoneRef.current;
       zoneRef.current = null;
       if (z === 'player') {
+        playSfx('insert');
         setLoadedId(d.id);
         setSide('A');
         setActiveId(null);
@@ -361,7 +363,7 @@ export function LibraryPage() {
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4" />
             </svg>
-            <span>Drop here to edit</span>
+            <span>Drop on the workbench to customize</span>
           </div>
         </div>
 
@@ -391,7 +393,7 @@ export function LibraryPage() {
         <CassetteDrawer
           cassettes={cassettes}
           open={drawerOpen}
-          onToggle={() => setDrawerOpen((o) => !o)}
+          onOpenChange={setDrawerOpen}
           activeId={activeId}
           loadedId={loadedId}
           onSelect={placeOnStage}
