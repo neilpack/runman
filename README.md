@@ -142,6 +142,9 @@ flows and app-client settings have not been verified by the implementation agent
 The local cassette library at `/`, editor at `/cassettes/:id/edit`, Status, and About
 remain public prototypes. The branded `/login` form uses Cognito SRP through the
 Amplify SDK for sign-up, email confirmation/resend, password reset, and sign-in.
+Same-session sign-up confirmation completes SDK-managed SRP auto-sign-in and then
+opens `/library`. If that temporary SDK context expired/reloaded, confirmation
+returns to login with a clear message; passwords are not saved by the app.
 Welcome/login redirect confirmed sessions to `/library`; dashboard and login share
 one SDK-backed session store, with no custom session cookie. It waits for a
 settled authenticated identity and offers sign-out; account changes reset its local

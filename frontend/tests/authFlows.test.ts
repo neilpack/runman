@@ -15,6 +15,7 @@ function deferred<T>() {
 function service(overrides: Partial<AuthFlowSdk> = {}): AuthFlowSdk {
   return {
     async signIn() { return { isSignedIn: true, nextStep: { signInStep: 'DONE' } }; },
+    async autoSignIn() { return { isSignedIn: true, nextStep: { signInStep: 'DONE' } }; },
     async signUp() { return { nextStep: { signUpStep: 'CONFIRM_SIGN_UP' } }; },
     async confirmSignUp() { return { nextStep: { signUpStep: 'DONE' } }; },
     async resendSignUpCode() {},
@@ -131,14 +132,15 @@ test('DONE without a confirmed SDK user never authenticates', async () => {
   assert.match(flow.getSnapshot().error!, /could not be verified/);
 });
 
-test('signup/confirmation/resend use Cognito inputs and return to normal login', async () => {
+test('signup/resend use SRP auto-signin; confirmation DONE without SDK context falls back to login', async () => {
   let resent = '';
   const store = session();
   const flow = createAuthFlow(service({
+    async autoSignIn() { assert.fail('DONE without SDK auto-signin context must not call autoSignIn'); },
     async signUp(input) {
       assert.equal(input.username, 'user@example.test');
       assert.equal(input.password, fields.password);
-      assert.equal(input.options.autoSignIn, false);
+      assert.deepEqual(input.options.autoSignIn, { authFlowType: 'USER_SRP_AUTH' });
       assert.deepEqual(input.options.userAttributes, { email: 'user@example.test' });
       return { nextStep: { signUpStep: 'CONFIRM_SIGN_UP' } };
     },
@@ -184,12 +186,110 @@ test('expected sign-in challenges select confirmation/reset; unsupported MFA sta
 
 test('bad/expired codes keep confirmation actionable and SDK failures clear pending', async () => {
   for (const name of ['CodeMismatchException', 'ExpiredCodeException']) {
-    const flow = createAuthFlow(service({ async confirmSignUp() { throw namedError(name); } }), session(), 'signup');
+    const flow = createAuthFlow(service({
+      async confirmSignUp() { throw namedError(name); },
+      async autoSignIn() { assert.fail('bad codes must never start auto-signin'); },
+    }), session(), 'signup');
     await flow.submit(fields);
     await flow.submit(fields);
     assert.equal(flow.getSnapshot().mode, 'confirmSignup');
     assert.equal(flow.getSnapshot().pending, false);
     assert.match(flow.getSnapshot().error!, name === 'ExpiredCodeException' ? /expired/ : /incorrect/);
+  }
+});
+
+test('email confirmation automatically signs in only after DONE and SDK session verification', async () => {
+  const automatic = deferred<Awaited<ReturnType<AuthFlowSdk['autoSignIn']>>>();
+  const read = deferred<AuthUser | null>();
+  const store = session(() => read.promise);
+  let autoCalls = 0;
+  const flow = createAuthFlow(service({
+    async confirmSignUp(input) {
+      assert.deepEqual(input, { username: 'user@example.test', confirmationCode: '123456' });
+      return { nextStep: { signUpStep: 'COMPLETE_AUTO_SIGN_IN' } };
+    },
+    async autoSignIn() { autoCalls++; return automatic.promise; },
+  }), store, 'signup');
+  await flow.submit(fields);
+  const pending = flow.submit(fields);
+  await Promise.resolve();
+  assert.equal(autoCalls, 1);
+  assert.equal(store.getSnapshot().status, 'checking');
+  store.handleAuthEvent('signedIn');
+  automatic.resolve({ isSignedIn: true, nextStep: { signInStep: 'DONE' } });
+  await Promise.resolve();
+  assert.equal(store.getSnapshot().status, 'checking');
+  read.resolve(user);
+  await pending;
+  assert.equal(store.getSnapshot().status, 'signedIn');
+  assert.equal(store.getSnapshot().user, user);
+  assert.equal(flow.getSnapshot().error, null);
+});
+
+test('signup that immediately completes supports the same automatic sign-in path', async () => {
+  const store = session();
+  let calls = 0;
+  const flow = createAuthFlow(service({
+    async signUp() { return { nextStep: { signUpStep: 'COMPLETE_AUTO_SIGN_IN' } }; },
+    async autoSignIn() { calls++; return { isSignedIn: true, nextStep: { signInStep: 'DONE' } }; },
+  }), store, 'signup');
+  await flow.submit(fields);
+  assert.equal(calls, 1);
+  assert.equal(store.getSnapshot().status, 'signedIn');
+});
+
+test('auto-signin error after confirmation returns to login rather than resubmitting the confirmed code', async () => {
+  const store = session();
+  const flow = createAuthFlow(service({
+    async confirmSignUp() { return { nextStep: { signUpStep: 'COMPLETE_AUTO_SIGN_IN' } }; },
+    async autoSignIn() { throw new Error('SDK context expired'); },
+  }), store, 'signup');
+  await flow.submit(fields);
+  await flow.submit(fields);
+  assert.equal(flow.getSnapshot().mode, 'login');
+  assert.match(flow.getSnapshot().message!, /Email confirmed.*Log in/);
+  assert.equal(flow.getSnapshot().error, null);
+  assert.equal(flow.getSnapshot().pending, false);
+  assert.equal(store.getSnapshot().status, 'signedOut');
+});
+
+test('canceled automatic sign-in clears late success without restoring the abandoned account', async () => {
+  for (const cancel of ['dispose', 'mode']) {
+    const automatic = deferred<Awaited<ReturnType<AuthFlowSdk['autoSignIn']>>>();
+    let clears = 0;
+    const store = session(async () => user, async () => { clears++; });
+    const flow = createAuthFlow(service({
+      async confirmSignUp() { return { nextStep: { signUpStep: 'COMPLETE_AUTO_SIGN_IN' } }; },
+      autoSignIn: () => automatic.promise,
+    }), store, 'signup');
+    await flow.submit(fields);
+    const pending = flow.submit(fields);
+    await Promise.resolve();
+    if (cancel === 'dispose') flow.dispose(); else flow.setMode('login');
+    store.handleAuthEvent('signedIn');
+    automatic.resolve({ isSignedIn: true, nextStep: { signInStep: 'DONE' } });
+    await pending;
+    assert.equal(store.getSnapshot().status, 'signedOut');
+    assert.equal(clears, 1);
+  }
+});
+
+test('unsupported automatic challenges or missing SDK session never grant private access', async () => {
+  for (const [isSignedIn, signInStep, confirmedUser] of [
+    [false, 'CONFIRM_SIGN_IN_WITH_TOTP_CODE', user],
+    [false, 'DONE', user],
+    [true, 'DONE', null],
+  ] satisfies [boolean, string, AuthUser | null][]) {
+    const store = session(async () => confirmedUser);
+    const flow = createAuthFlow(service({
+      async confirmSignUp() { return { nextStep: { signUpStep: 'COMPLETE_AUTO_SIGN_IN' } }; },
+      async autoSignIn() { return { isSignedIn, nextStep: { signInStep } }; },
+    }), store, 'signup');
+    await flow.submit(fields);
+    await flow.submit(fields);
+    assert.equal(store.getSnapshot().status, 'signedOut');
+    assert.equal(flow.getSnapshot().mode, 'login');
+    assert.match(flow.getSnapshot().message!, /Email confirmed/);
   }
 });
 
