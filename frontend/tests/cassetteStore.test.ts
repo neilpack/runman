@@ -1,3 +1,4 @@
+import { createEditorSaver } from '../src/cassettes/editorSaver';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { cassetteToSaveRequest, type Cassette, type CassetteDocument, type CassetteResponse, type ListCassettesResponse } from '@runman/shared';
@@ -301,4 +302,58 @@ test('pool/client namespaces and prototype-like IDs remain isolated and safe', a
   const second = harness({}, disk, 'other-pool:client');
   second.store.setSession('authenticated', 'alice'); await tick();
   assert.deepEqual(second.store.getAll(), []);
+});
+
+
+test('Done waits for an in-flight autosave and saves edits made during it', async () => {
+  const first = deferred<CassetteResponse>();
+  const requests: number[] = [];
+  const { store } = harness({ save: async (_owner, request) => {
+    requests.push(request.expectedRevision);
+    if (requests.length === 1) return first.promise;
+    return { cassette: { ...document(request.cassette.id, request.expectedRevision + 1), payload: request.cassette } };
+  } });
+  store.setSession('authenticated', 'alice'); await tick();
+  const local = store.create();
+  const saver = createEditorSaver(store, local.id, store.getSync().context);
+  const autosave = saver();
+  store.update(local.id, { name: 'Latest mix' });
+  const done = saver();
+  assert.equal(autosave, done);
+  const initial = cassetteToSaveRequest(local, 0);
+  assert.equal(initial.ok, true);
+  if (!initial.ok) throw new Error('Invalid fixture');
+  first.resolve({ cassette: { ...document(local.id, 1), payload: initial.value.cassette } });
+  assert.equal(await done, true);
+  assert.deepEqual(requests, [0, 1]);
+  assert.equal(store.getSync().tapes[local.id].dirty, false);
+  assert.equal(store.get(local.id)?.name, 'Latest mix');
+});
+
+test('failed autosaves keep edits and Done can retry without a retry loop', async () => {
+  let calls = 0;
+  const { store } = harness({ save: async (_owner, request) => {
+    if (++calls === 1) throw new Error('Offline');
+    return { cassette: { ...document(request.cassette.id, 1), payload: request.cassette } };
+  } });
+  store.setSession('authenticated', 'alice'); await tick();
+  const local = store.create();
+  const saver = createEditorSaver(store, local.id, store.getSync().context);
+  assert.equal(await saver(), false);
+  assert.equal(calls, 1);
+  assert.equal(store.getSync().tapes[local.id].dirty, true);
+  assert.equal(await saver(), true);
+});
+
+test('an account change stops the editor save before saving further edits', async () => {
+  const response = deferred<CassetteResponse>();
+  const { store } = harness({ save: async () => response.promise });
+  store.setSession('authenticated', 'alice'); await tick();
+  const local = store.create();
+  const saver = createEditorSaver(store, local.id, store.getSync().context);
+  const saving = saver();
+  store.setSession('authenticated', 'bob');
+  response.resolve({ cassette: document(local.id, 1, local.name) });
+  assert.equal(await saving, false);
+  assert.equal(await saver(), false);
 });

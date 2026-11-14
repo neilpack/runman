@@ -1,9 +1,13 @@
-import type { StickerKind } from '@runman/shared';
+import type { CustomSticker, StickerKind } from '@runman/shared';
+import { CustomStickerArt } from './CustomStickerArt';
+import { isCustomKind } from './customStickers';
 import { findIconSticker } from './stickerLibrary';
 
 interface StickerIconProps {
   kind: StickerKind;
   color: string;
+  /** The drawing behind a `custom-<id>` kind (from the tape's customStickers). */
+  art?: CustomSticker;
   className?: string;
 }
 
@@ -29,7 +33,10 @@ function normalizeSvg(svg: string): string {
 }
 
 /** Die-cut style vector sticker (white outline + colour fill). */
-export function StickerIcon({ kind, color, className }: StickerIconProps) {
+export function StickerIcon({ kind, color, art, className }: StickerIconProps) {
+  // Hand-drawn stickers carry their own colours. A deleted drawing renders nothing.
+  if (isCustomKind(kind)) return art ? <CustomStickerArt art={art} className={className} /> : null;
+
   // Icon stickers (stickerLibrary.ts): pasted SVG coloured via currentColor.
   const icon = findIconSticker(kind);
   if (icon) {

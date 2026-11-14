@@ -3,7 +3,8 @@
 import type { Cassette, ShellType } from '@runman/shared';
 
 export type TapeStatus = 'all' | 'has-songs' | 'blank' | 'in-deck';
-export type TapeSort = 'recent' | 'newest' | 'name' | 'longest';
+/** 'custom' = the user's own drag-to-arrange order (the store's array order). */
+export type TapeSort = 'custom' | 'recent' | 'newest' | 'name' | 'longest';
 export type ColorFamily = 'red' | 'orange' | 'yellow' | 'green' | 'teal' | 'blue' | 'purple' | 'pink' | 'neutral';
 
 export interface TapeFilter {
@@ -14,7 +15,7 @@ export interface TapeFilter {
   sort: TapeSort;
 }
 
-export const DEFAULT_FILTER: TapeFilter = { query: '', status: 'all', shellTypes: [], colors: [], sort: 'recent' };
+export const DEFAULT_FILTER: TapeFilter = { query: '', status: 'all', shellTypes: [], colors: [], sort: 'custom' };
 
 export const STATUS_OPTIONS: { id: TapeStatus; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -24,6 +25,7 @@ export const STATUS_OPTIONS: { id: TapeStatus; label: string }[] = [
 ];
 
 export const SORT_OPTIONS: { id: TapeSort; label: string }[] = [
+  { id: 'custom', label: 'My order' },
   { id: 'recent', label: 'Recently edited' },
   { id: 'newest', label: 'Newest first' },
   { id: 'name', label: 'Name A–Z' },
@@ -99,8 +101,10 @@ export function filterTapes(tapes: Cassette[], f: TapeFilter, loadedId: string |
     case 'longest':
       return result.sort((a, b) => b.tracks.length - a.tracks.length || byName(a, b));
     case 'recent':
-    default:
       return result.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    case 'custom':
+    default:
+      return result; // filter() keeps the store's order, which is the user's arrangement.
   }
 }
 

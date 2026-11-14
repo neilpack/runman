@@ -3,12 +3,13 @@
 
 import type { Cassette, Sticker, TapeSide } from '@runman/shared';
 import { fitNameSize, penFont } from './constants';
+import { findCustomSticker } from './customStickers';
 import { StickerIcon } from './StickerIcon';
 import './cassette.css';
 
 export type CassetteLook = Pick<
   Cassette,
-  'name' | 'shellColor' | 'labelColor' | 'inkColor' | 'shellType' | 'penStyle' | 'stickers'
+  'name' | 'shellColor' | 'labelColor' | 'inkColor' | 'shellType' | 'penStyle' | 'stickers' | 'customStickers'
 >;
 
 export interface CassetteFaceProps {
@@ -96,7 +97,7 @@ export function CassetteFace({
               }}
               onPointerDown={onStickerPointerDown ? (e) => onStickerPointerDown(e, s) : undefined}
             >
-              <StickerIcon kind={s.kind} color={s.color} />
+              <StickerIcon kind={s.kind} color={s.color} art={findCustomSticker(cassette.customStickers, s.kind)} />
             </div>
           ))}
         </div>

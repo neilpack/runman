@@ -14,10 +14,6 @@
   flex-wrap: wrap;
 }
 
-.editor-saved {
-  font-size: 0.8rem;
-}
-
 /* Three panes on wide screens: customization | tape on the cutting mat | tracklist notepad */
 .editor-grid {
   max-width: 1640px;
@@ -310,6 +306,174 @@
 }
 
 .sticker-btn svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* ---- Custom (hand-drawn) sticker slots ---- */
+.custom-stickers {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 14px;
+  border-top: 1px dashed rgba(255, 122, 26, 0.35);
+}
+
+.custom-stickers-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.custom-stickers-head .studio-muted {
+  font-size: 0.75rem;
+}
+
+.sticker-tray.custom-tray {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.custom-slot-wrap {
+  position: relative;
+  display: grid;
+}
+
+.sticker-btn.custom-slot {
+  width: 100%;
+  padding: 6px;
+}
+
+.sticker-btn.custom-slot .custom-sticker-art {
+  display: block;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4));
+}
+
+.custom-slot-wrap.open .sticker-btn.custom-slot {
+  background: #2c2c31;
+  box-shadow: 0 0 0 2px #ff7a1a;
+}
+
+/* Empty slot: dashed "+" placeholder */
+.sticker-btn.custom-slot.empty {
+  display: grid;
+  place-items: center;
+  border: 2px dashed rgba(255, 255, 255, 0.16);
+  background: transparent;
+  color: var(--studio-muted);
+  cursor: pointer;
+}
+
+.sticker-btn.custom-slot.empty svg {
+  width: 52%;
+  height: 52%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+
+.sticker-btn.custom-slot.empty:hover {
+  border-color: #ff7a1a;
+  background: rgba(255, 122, 26, 0.1);
+  color: #ffb057;
+  transform: scale(1.08);
+}
+
+.sticker-btn.custom-slot.empty:focus-visible,
+.sticker-btn.custom-slot:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/* Popover with Stick / Edit / Remove, under a filled slot */
+.slot-menu {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 8px);
+  left: 50%;
+  min-width: 170px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #2a2a2f, #1c1c20);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.6);
+  transform: translateX(-50%);
+  animation: slot-menu-pop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.slot-menu.align-start {
+  left: 0;
+  transform: none;
+}
+
+.slot-menu.align-end {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+.slot-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--studio-text);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.slot-menu button:hover,
+.slot-menu button:focus-visible {
+  background: #34343a;
+  outline: none;
+}
+
+.slot-menu button.danger {
+  color: #fda4af;
+}
+
+.slot-menu button.danger:hover {
+  background: rgba(244, 63, 94, 0.15);
+}
+
+.slot-menu svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.8;
+}
+
+@keyframes slot-menu-pop {
+  from {
+    opacity: 0;
+    margin-top: -6px;
+  }
+}
+
+.custom-remove-visual {
+  width: 96px;
+  height: 96px;
+}
+
+.custom-remove-visual svg {
   width: 100%;
   height: 100%;
 }
@@ -1125,4 +1289,210 @@
 html.dragging-sticker,
 html.dragging-sticker * {
   cursor: grabbing !important;
+}
+
+/* ======================================================================
+   Cassette settings: Private ←→ Public slider (same pill as Side A / B)
+   ====================================================================== */
+.settings-block {
+  gap: 14px;
+}
+
+.visibility-switch {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 4px;
+  border-radius: 999px;
+  background: #0f0f11;
+  isolation: isolate;
+}
+
+/* The orange thumb that slides left (private) / right (public). */
+.visibility-thumb {
+  position: absolute;
+  z-index: -1;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc(50% - 4px);
+  border-radius: 999px;
+  background: #ff7a1a;
+  box-shadow: 0 0 16px rgba(255, 122, 26, 0.5);
+  transition: transform 0.32s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+.visibility-switch.is-public .visibility-thumb {
+  transform: translateX(100%);
+}
+
+.visibility-switch button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px 14px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--studio-muted);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.visibility-switch button.on {
+  color: #2a1000;
+}
+
+.visibility-switch button:focus-visible {
+  outline: 2px solid var(--studio-accent);
+  outline-offset: 2px;
+}
+
+.visibility-switch svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.settings-note {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+/* ---- Uploaded songs: the ⋮⋮ handle doubles as an options button ---- */
+.track-menu-btn {
+  padding: 2px 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  font-size: 0.9rem;
+  letter-spacing: -0.2em;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.track-menu-btn:hover,
+.track-menu-btn.open {
+  background: rgba(255, 122, 26, 0.18);
+  color: #ff7a1a;
+}
+
+.track-visibility {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+  background: rgba(127, 127, 127, 0.18);
+}
+
+.track-visibility.public {
+  background: rgba(255, 122, 26, 0.2);
+  color: #c2560a;
+}
+
+/* Pop-up menu (portalled into <body>, so it uses .studio-vars for the theme). */
+.track-menu {
+  position: fixed;
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--studio-panel-2), var(--studio-panel));
+  border: 1px solid rgba(255, 122, 26, 0.35);
+  color: var(--studio-text);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+  animation: picker-pop 0.2s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+.track-menu-title,
+.track-menu-foot {
+  padding: 2px 6px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--studio-muted);
+}
+
+.track-menu-foot {
+  padding-top: 6px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  font-size: 0.72rem;
+}
+
+.track-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 10px;
+  background: #0f0f11;
+  color: var(--studio-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.track-menu button:hover,
+.track-menu button:focus-visible {
+  outline: none;
+  background: #1f1f24;
+}
+
+.track-menu button.on {
+  background: rgba(255, 122, 26, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(255, 122, 26, 0.6);
+}
+
+.track-menu-check {
+  flex: 0 0 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #2a2a2f;
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.track-menu button.on .track-menu-check {
+  background: #ff7a1a;
+  color: #2a1000;
+}
+
+.track-menu-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.track-menu-text strong {
+  font-size: 0.88rem;
+}
+
+.track-menu-text small {
+  font-size: 0.74rem;
+  color: var(--studio-muted);
 }

@@ -32,6 +32,7 @@ import type {
   TapeSnapshot,
   TrendingSongsResponse,
 } from '@runman/shared';
+import { sanitizeCustomStickers } from '@runman/shared';
 import { getDownloadUrl, getObjectText, listObjectKeys } from '../aws/s3.js';
 import { config } from '../config.js';
 import { demoProfiles, demoSongs } from './exploreDemoData.js';
@@ -214,6 +215,7 @@ export function parseTapeSnapshot(raw: unknown): TapeSnapshot | null {
     penStyle: pen,
     stickers: parseStickers(raw.stickers),
     sideB,
+    customStickers: sanitizeCustomStickers(raw.customStickers),
     updatedAt,
     trackCount: Math.floor(trackCount),
   };
