@@ -30,11 +30,12 @@ Run from the repo root.
 | `npm run typecheck`    | `tsc` across all workspaces. **Run before finishing a task.** |
 | `npm run build`        | Lambda bundle (`backend/dist/`) + frontend (`frontend/dist/`) |
 | `npm run typecheck:amplify` | Check Amplify definitions without deploying AWS resources |
+| `npm run test:legacy-api` | Typecheck and test local-example/API exposure boundaries |
 
 ## AWS deployment boundary
 
 - New RunMan cloud resources belong in `amplify/` (Amplify Gen 2). Cognito owns email/password identity; do not add a duplicate pool to SAM.
-- Preserve `backend/` Express/SAM examples for local development. They have no user ownership enforcement and must not serve private cassette data. Their production restriction is a later checkpoint.
+- Preserve `backend/` Express/SAM examples for local development; they have no user ownership enforcement and must not serve private cassette data. `/api/items` is disabled by default, requires exact `NODE_ENV=development` plus `ENABLE_LEGACY_EXAMPLES=true`, and is always disabled by AWS execution markers or the Lambda entry point. Keep `/api/health` public.
 - Region: `us-west-2`. Use one shared backend and generated outputs; do not start personal sandboxes or deploy SAM alongside it by default.
 - Do not deploy/create/delete AWS resources without the current checkpoint's authorization. Typechecking/building is local; running a sandbox creates cloud resources.
 

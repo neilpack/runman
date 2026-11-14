@@ -16,6 +16,7 @@ Follow the conventions in AGENTS.md. In particular:
 - Read env vars only in `src/config.ts`; document new ones in `backend/.env.example`.
 - New RunMan AWS resources go in `amplify/`, using Gen 2 resource definitions and least-privilege access. Do not duplicate them in `backend/template.yaml`. SAM changes apply only to explicitly requested maintenance of the retained Express scaffold.
 - Keep an in-memory fallback for new storage when practical so the app runs without AWS creds.
+- Retained `/api/items` examples require explicit local development opt-in, are denied in production/AWS Lambda, and never handle private cassette data. Preserve the disable-only Lambda override and public health endpoint; verify changes with `npm run test:legacy-api`.
 - Put request/response types in `shared/src/index.ts`. Throw `HttpError` for 4xx responses.
 - Never hard-code credentials, account IDs, or ARNs. Never run `sam deploy` or create/delete
   real AWS resources unless the user explicitly asks.

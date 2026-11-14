@@ -150,9 +150,18 @@ The signed-in dashboard currently displays identity status only. Cassette saving
 and audio storage are not implemented. Test real verification/reset email delivery,
 session reload, sign-out, and account switching after shared Cognito provisioning.
 
-The retained Express `/api/items` example is not authenticated and has no per-user
-ownership. Do not use it for private cassette data or publish the SAM example;
-restricting that example is a later checkpoint.
+The retained Express `/api/items` example has no authentication or per-user ownership
+and is **disabled by default**. For local examples only, set both `NODE_ENV=development`
+and `ENABLE_LEGACY_EXAMPLES=true` in `backend/.env` (the dev script does not set
+`NODE_ENV` for you). Leave `ITEMS_TABLE` blank for the in-memory store. Never put
+private cassette data in this example or publish the SAM scaffold alongside Amplify.
+
+All example methods/subpaths return 404 unless that exact local opt-in is active.
+Production/unset modes and AWS execution markers deny it even with the flag enabled;
+the Lambda entry point always disables examples independently of environment values.
+An unsafe opt-in is ignored rather than stopping the server, so `/api/health` stays
+public and available. This retires the public example API; it does not implement
+private cassette authorization, which will use Amplify Data ownership rules.
 
 ### 5. Run the app
 
@@ -169,6 +178,7 @@ npm run typecheck             # all workspaces plus Amplify definitions
 npm run typecheck:amplify     # infrastructure definitions only; no AWS deployment
 npm run build                # retained Lambda bundle plus frontend
 npm run test:auth            # configuration and private-render boundary tests
+npm run test:legacy-api      # example exposure, local memory CRUD, and Lambda guard
 ```
 
 Use Node.js **24 LTS** for development and CI. On the current Node 25.2.1 machine,
@@ -183,6 +193,8 @@ Amplify runtime/UI packages are installed and wired to generated outputs. Focuse
 tests use Node's test runner through the installed `tsx` tooling and server rendering;
 they verify configuration failure and private-content boundaries, not live Cognito
 flows, browser interactions, or backend authorization.
+Legacy API tests run isolated local HTTP servers and invoke the exported Lambda
+handler with API Gateway events, using sanitized environments and no AWS requests.
 
 ---
 
