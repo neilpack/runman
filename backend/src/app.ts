@@ -8,11 +8,12 @@ import { itemsRouter } from './routes/items.js';
 import { musicRouter } from './routes/music.js';
 import { createCassettesRouter, type CassetteApiOptions } from './routes/cassettes.js';
 import { createMediaRouter, type MediaApiOptions } from './routes/media.js';
+import { createProfileRouter, type ProfileApiOptions } from './routes/profile.js';
 import { createMediaRuntime } from './services/mediaRuntime.js';
 import { exploreRouter } from './routes/explore.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 
-export function createApp({ disableLegacyExamples = false, cassetteApi, mediaApi }: { disableLegacyExamples?: boolean; cassetteApi?: CassetteApiOptions; mediaApi?: MediaApiOptions } = {}) {
+export function createApp({ disableLegacyExamples = false, cassetteApi, mediaApi, profileApi }: { disableLegacyExamples?: boolean; cassetteApi?: CassetteApiOptions; mediaApi?: MediaApiOptions; profileApi?: ProfileApiOptions } = {}) {
   const app = express();
   const allowLegacyExamples = config.legacyExamplesEnabled && !disableLegacyExamples;
 
@@ -25,6 +26,7 @@ export function createApp({ disableLegacyExamples = false, cassetteApi, mediaApi
   const media = createMediaRuntime(mediaApi);
   app.use('/api/media', createMediaRouter(mediaApi, media));
   app.use('/api/cassettes', createCassettesRouter({ ...cassetteApi, authorizeAudio: cassetteApi?.authorizeAudio ?? media?.authorize }));
+  app.use('/api/profile', createProfileRouter(profileApi));
   app.use(express.json());
 
   // Register routes here. All API routes live under /api.

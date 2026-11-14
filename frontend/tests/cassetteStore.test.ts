@@ -32,7 +32,7 @@ function harness(overrides: Partial<CassetteApi> = {}, disk = new Map<string, st
     save: async (_owner, request) => ({ cassette: { schemaVersion: 1, revision: request.expectedRevision + 1, createdAt: time, updatedAt: time, payload: request.cassette } }),
     remove: async (_owner, id, revision) => ({ id, deletedRevision: revision }), ...overrides,
   };
-  const store = createCassetteStore({ api, namespace, storage: { getItem: (id) => disk.get(id) ?? null, setItem: (id, value) => { if (quota) throw new Error('quota'); disk.set(id, value); } }, newId: () => `fresh-${++serial}`, now: () => time });
+  const store = createCassetteStore({ api, namespace, storage: { getItem: (id) => disk.get(id) ?? null, setItem: (id, value) => { if (quota) throw new Error('quota'); disk.set(id, value); } }, newId: () => `fresh-${++serial}`, now: () => time, communityAudioUrl: (id) => `/api/explore/songs/${id}/audio` });
   return { store, disk, api, quota: (value: boolean) => { quota = value; } };
 }
 
@@ -80,18 +80,16 @@ test('finalized private audio survives failed saving, successful retry, reload a
   assert.equal(JSON.stringify(copy).includes('expiresAt'), false);
 });
 
-test('Explore community tracks survive draft updates and fail cloud save explicitly without dropping tracks', async () => {
+test('Explore community tracks save to the cloud and come back playable', async () => {
   let saves = 0;
-  const { store } = harness({ save: async () => { saves++; throw new Error('Unexpected save'); } });
+  const { store } = harness({ save: async (_owner, request) => { saves++; return { cassette: { schemaVersion: 1, revision: request.expectedRevision + 1, createdAt: time, updatedAt: time, payload: request.cassette } }; } });
   store.setSession('authenticated', 'alice'); await tick();
   const local = store.create();
   const community = { id: 'community-track', sourceId: 'public-song-1', source: 'community' as const, title: 'Explore song', artist: 'Artist', durationSec: 30, side: 'A' as const, audioUrl: '/api/explore/songs/public-song-1/audio' };
   store.update(local.id, { tracks: [community] });
-  assert.deepEqual(store.get(local.id)?.tracks, [community]);
-  assert.equal(await store.save(local.id), false);
-  assert.equal(saves, 0);
-  assert.match(store.getSync().tapes[local.id].issues![0].message, /Community-song/);
-  store.setSession('hidden'); store.setSession('authenticated', 'alice'); await tick();
+  assert.equal(await store.save(local.id), true);
+  assert.equal(saves, 1);
+  assert.equal(store.getSync().tapes[local.id].dirty, false);
   assert.deepEqual(store.get(local.id)?.tracks, [community]);
 });
 

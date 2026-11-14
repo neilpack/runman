@@ -199,3 +199,30 @@ upload/save/reload/play flow; additional live isolation/renewal checks remain.
 Private audio uses a separate bucket from public Explore. The separate
 audio-storage worktree is unchanged. Earlier checkpoint notes above describe the
 database-only implementation before this integration.
+
+## Visibility, community tracks and profile item — 2026-11-14
+
+Audit after #32 (public/private), #34 (custom stickers) and #22/#29 (account/Explore):
+
+- **Visibility now persists.** `payload.visibility` (`private`|`public`, optional) and
+  `visibility` on `s3` (upload/recording) tracks are accepted. Before this, any tape or
+  own song switched to public failed cloud save ("Unknown or server-owned field").
+  Library/community tracks never carry visibility; the adapter drops it.
+- **Community (Explore) tracks now persist** as `source: community`, `provider: explore`,
+  required `sourceId` (ID pattern) and `hasAudio`. The origin-dependent audio URL is not
+  stored; `cassetteFromDocument(doc, { communityAudioUrl })` rebuilds it on restore
+  (the frontend store passes `api.publicSongAudioUrl`). Media authorization only runs for
+  `provider: s3`.
+- **Custom stickers** were already covered (`customStickers` in the payload, 5 slots,
+  bounded strokes/coords). No change needed; worst case fits the 256 KiB payload cap.
+- **Profile item:** `PK=USER#<sub>`, `SK=PROFILE`, `{ schemaVersion: 1, updatedAt,
+  favoriteTape: TapeSnapshot | null }` in the same table. `GET`/`PUT /api/profile`
+  (Cognito access token, last write wins, same storage settings as cassettes; 503 when
+  disabled). It never matches the `CASSETTE#` query prefix. Frontend favorites save here,
+  cache in localStorage, migrate a device-only favorite on first load, and stay local only
+  when the server answers 503. Username/avatar remain Cognito attributes.
+- **Lambda/API Gateway:** a deployed HTTP API needs explicit `GET /api/profile` and
+  `PUT /api/profile` routes (plus CORS PUT) before this works live. Not deployed by agents.
+
+Still open (not database): publishing public tapes/songs to the Explore catalog
+(`frontend/src/api/publicSync.ts` stubs) and writing `public/profiles/<sub>.json`.

@@ -3,6 +3,7 @@ import { fetchAuthSession } from 'aws-amplify/auth';
 import { sessionStore } from '@/auth/session';
 import { createCassetteApi } from './cassetteClient';
 import { createMediaApi } from './mediaClient';
+import { createProfileApi } from './profileClient';
 import { getMediaAccount } from '@/auth/mediaContext';
 
 import type {
@@ -66,6 +67,14 @@ export const api = {
       const session = sessionStore.getSnapshot();
       return session.status === 'signedIn' ? session.user?.userId ?? null : null;
     },
+    async accessToken() {
+      const access = (await fetchAuthSession()).tokens?.accessToken;
+      return access && typeof access.payload.sub === 'string' && typeof access.payload.exp === 'number'
+        ? { sub: access.payload.sub, token: access.toString(), expiresAt: access.payload.exp } : null;
+    },
+  }),
+  profile: createProfileApi({
+    baseUrl: BASE_URL,
     async accessToken() {
       const access = (await fetchAuthSession()).tokens?.accessToken;
       return access && typeof access.payload.sub === 'string' && typeof access.payload.exp === 'number'

@@ -1,5 +1,5 @@
 import type { Cassette, StoredAudioReference, Track } from './index.js';
-import type { CassetteAudioReferences, CassetteDocument, CassettePayload, CassetteValidationIssue, CassetteValidationResult, PersistedCassetteTrack, RestoredCassette, SaveCassetteRequest } from './cassettePersistence.js';
+import type { CassetteAudioReferences, CassetteDocument, CassettePayload, CassetteValidationIssue, CassetteValidationResult, PersistedCassetteTrack, RestoreCassetteOptions, RestoredCassette, SaveCassetteRequest } from './cassettePersistence.js';
 import { validateCassetteDocument, validateSaveCassetteRequest } from './cassetteValidation.js';
 
 function defined<T extends object>(value: T): T {
@@ -21,17 +21,19 @@ function publicLicense(value: string | undefined): string | undefined {
 /** Pure local adapter only; it neither uploads audio nor proves object ownership. */
 export function cassetteToSaveRequest(cassette: Cassette, expectedRevision: number, references: CassetteAudioReferences = {}): CassetteValidationResult<SaveCassetteRequest> {
   const issues: CassetteValidationIssue[] = [];
-  const trackFields = ['id', 'sourceId', 'title', 'artist', 'durationSec', 'side', 'source', 'audioUrl', 'audioReference', 'artworkUrl', 'licenseUrl'];
+  const trackFields = ['id', 'sourceId', 'title', 'artist', 'durationSec', 'side', 'source', 'audioUrl', 'audioReference', 'artworkUrl', 'licenseUrl', 'visibility'];
   try {
     const { createdAt: _createdAt, updatedAt: _updatedAt, tracks, sideB, ...look } = cassette;
     const persisted = tracks.map((track, index) => {
       for (const key of Object.keys(track)) if (!trackFields.includes(key)) issues.push({ path: `cassette.tracks[${index}].${key}`, message: 'Unknown UI track field.' });
-      const { source, audioUrl, audioReference, ...details } = track;
-      if (source === 'community') {
-        issues.push({ path: `cassette.tracks[${index}].source`, message: 'Community-song cloud persistence is not connected yet. The complete tape remains a local draft.' });
-        return {};
-      }
+      // Visibility only applies to the listener's own audio; other sources drop it.
+      const { source, audioUrl, audioReference, visibility, ...details } = track;
       if (details.licenseUrl !== undefined) details.licenseUrl = publicLicense(details.licenseUrl);
+      if (source === 'community') {
+        if (audioReference !== undefined) issues.push({ path: `cassette.tracks[${index}].audioReference`, message: 'Community tracks cannot include private audio references.' });
+        // The stable audio URL is rebuilt from sourceId on restore (see cassetteFromDocument).
+        return defined({ ...details, source, provider: 'explore', hasAudio: audioUrl !== undefined });
+      }
       if (source === 'library') {
         if (audioReference !== undefined) issues.push({ path: `cassette.tracks[${index}].audioReference`, message: 'Library tracks cannot include private audio references.' });
         return defined({ ...details, source, provider: 'jamendo', ...(audioUrl !== undefined ? { audioUrl } : {}) });
@@ -42,7 +44,7 @@ export function cassetteToSaveRequest(cassette: Cassette, expectedRevision: numb
       if (!audio) issues.push({ path: `cassette.tracks[${index}].audio`, message: 'Upload this audio first and supply its durable audio reference; local, blob, or public-looking playback URLs are not enough.' });
       // Earlier UI versions represented uploads as recording + a separate map.
       const persistedSource = audioReference === undefined && source === 'recording' ? audio?.source ?? source : source;
-      return defined({ ...details, source: persistedSource, provider: 's3', audio });
+      return defined({ ...details, source: persistedSource, provider: 's3', audio, visibility });
     });
     if (issues.length) return { ok: false, issues };
     // JSON optional fields remain absent; sideB={} is deliberately kept distinct.
@@ -54,7 +56,7 @@ export function cassetteToSaveRequest(cassette: Cassette, expectedRevision: numb
 }
 
 /** Durable audio returns as references, never fabricated/expired playback URLs. */
-export function cassetteFromDocument(document: CassetteDocument): CassetteValidationResult<RestoredCassette> {
+export function cassetteFromDocument(document: CassetteDocument, options: RestoreCassetteOptions = {}): CassetteValidationResult<RestoredCassette> {
   const validated = validateCassetteDocument(document);
   if (!validated.ok) return validated;
   const { payload, createdAt, updatedAt } = validated.value;
@@ -64,6 +66,10 @@ export function cassetteFromDocument(document: CassetteDocument): CassetteValida
   };
   const tracks: Track[] = payload.tracks.map((track: PersistedCassetteTrack) => {
     if (track.source === 'library') { const { provider: _provider, ...ui } = track; return ui; }
+    if (track.source === 'community') {
+      const { provider: _provider, hasAudio, ...ui } = track;
+      return { ...ui, ...(hasAudio && options.communityAudioUrl ? { audioUrl: options.communityAudioUrl(track.sourceId) } : {}) };
+    }
     const { provider: _provider, source: _source, audio, ...ui } = track;
     references[track.side][track.id] = audio;
     return { ...ui, source: track.source, audioReference: audio };

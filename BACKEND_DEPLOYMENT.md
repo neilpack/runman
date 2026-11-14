@@ -95,6 +95,8 @@ authorized temporary credentials when run outside Lambda.
    | GET | `/api/cassettes/{id}` |
    | PUT | `/api/cassettes/{id}` |
    | DELETE | `/api/cassettes/{id}` |
+   | GET | `/api/profile` |
+   | PUT | `/api/profile` |
    | GET | `/api/music/search` |
    | GET | `/api/explore/songs` |
    | GET | `/api/explore/songs/trending` |

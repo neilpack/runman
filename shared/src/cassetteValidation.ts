@@ -1,8 +1,10 @@
 import type { CustomSticker, CustomStickerStroke } from './index.js';
 import type { CassetteDocument, CassetteValidationIssue, CassetteValidationResult, DeleteCassetteRequest, ListCassettesRequest, SaveCassetteRequest } from './cassettePersistence.js';
 import { CASSETTE_LIMITS as limits } from './cassettePersistence.js';
+import type { ProfileDocument, SaveProfileRequest } from './profilePersistence.js';
 
 const pens = ['handwritten', 'marker', 'script', 'typewriter', 'clean'];
+const visibilities = ['private', 'public'];
 const trackDetails = ['id', 'title', 'artist', 'durationSec', 'side', 'source', 'provider'];
 /** Pen width range for hand-drawn stickers, in 100 × 100 canvas units. */
 export const CUSTOM_STROKE_WIDTH = { min: 0.5, max: 40 } as const;
@@ -123,8 +125,12 @@ class Check {
       !/^audio\/(?:mpeg|mp3|mp4|aac|x-m4a|wav|wave|x-wav|ogg|webm|flac)(?:;\s?codecs=[a-z\d.,_-]{1,80})?$/i.test(audio.contentType)) this.fail(`${path}.contentType`, 'Unsupported audio content type.');
     this.number(audio.sizeBytes, `${path}.sizeBytes`, 1, limits.audioBytes, true);
   }
-  payload(value: unknown, path: string) {
-    const tape = this.fields(value, path, payloadFields, ['sideB', 'customStickers']);
+  timestamp(value: unknown, path: string) {
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString() !== value) this.fail(path, 'Expected a canonical ISO timestamp.');
+  }
+  /** A tape's look frozen for a profile (TapeSnapshot): no tracks or audio. */
+  snapshot(value: unknown, path: string) {
+    const tape = this.fields(value, path, ['id', 'name', 'shellColor', 'shellType', ...visuals, 'updatedAt', 'trackCount'], ['sideB', 'customStickers']);
     if (!tape) return;
     this.id(tape.id, `${path}.id`);
     this.text(tape.name, `${path}.name`, limits.name, true);
@@ -134,14 +140,32 @@ class Check {
     this.color(tape.inkColor, `${path}.inkColor`);
     this.choice(tape.penStyle, `${path}.penStyle`, pens);
     this.stickers(tape.stickers, `${path}.stickers`);
-    if (Object.hasOwn(tape, 'sideB')) {
-      const side = this.fields(tape.sideB, `${path}.sideB`, [], visuals);
-      if (side) {
-        for (const color of ['labelColor', 'inkColor']) if (Object.hasOwn(side, color)) this.color(side[color], `${path}.sideB.${color}`);
-        if (Object.hasOwn(side, 'penStyle')) this.choice(side.penStyle, `${path}.sideB.penStyle`, pens);
-        if (Object.hasOwn(side, 'stickers')) this.stickers(side.stickers, `${path}.sideB.stickers`);
-      }
-    }
+    this.sideB(tape, path);
+    if (Object.hasOwn(tape, 'customStickers')) this.customStickers(tape.customStickers, `${path}.customStickers`);
+    this.timestamp(tape.updatedAt, `${path}.updatedAt`);
+    this.number(tape.trackCount, `${path}.trackCount`, 0, limits.tracksPerCassette, true);
+  }
+  sideB(tape: Record<string, unknown>, path: string) {
+    if (!Object.hasOwn(tape, 'sideB')) return;
+    const side = this.fields(tape.sideB, `${path}.sideB`, [], visuals);
+    if (!side) return;
+    for (const color of ['labelColor', 'inkColor']) if (Object.hasOwn(side, color)) this.color(side[color], `${path}.sideB.${color}`);
+    if (Object.hasOwn(side, 'penStyle')) this.choice(side.penStyle, `${path}.sideB.penStyle`, pens);
+    if (Object.hasOwn(side, 'stickers')) this.stickers(side.stickers, `${path}.sideB.stickers`);
+  }
+  payload(value: unknown, path: string) {
+    const tape = this.fields(value, path, payloadFields, ['sideB', 'customStickers', 'visibility']);
+    if (!tape) return;
+    if (Object.hasOwn(tape, 'visibility')) this.choice(tape.visibility, `${path}.visibility`, visibilities);
+    this.id(tape.id, `${path}.id`);
+    this.text(tape.name, `${path}.name`, limits.name, true);
+    this.color(tape.shellColor, `${path}.shellColor`);
+    this.choice(tape.shellType, `${path}.shellType`, ['solid', 'clear', 'retro']);
+    this.color(tape.labelColor, `${path}.labelColor`);
+    this.color(tape.inkColor, `${path}.inkColor`);
+    this.choice(tape.penStyle, `${path}.penStyle`, pens);
+    this.stickers(tape.stickers, `${path}.stickers`);
+    this.sideB(tape, path);
     if (Object.hasOwn(tape, 'customStickers')) this.customStickers(tape.customStickers, `${path}.customStickers`);
     if (!Array.isArray(tape.tracks)) { this.fail(`${path}.tracks`, 'Expected a track array.'); return; }
     if (tape.tracks.length > limits.tracksPerCassette) this.fail(`${path}.tracks`, `At most ${limits.tracksPerCassette} tracks per cassette.`);
@@ -149,8 +173,12 @@ class Check {
     const tracks: unknown[] = tape.tracks;
     tracks.slice(0, limits.tracksPerCassette + 1).forEach((value, index) => {
       const at = `${path}.tracks[${index}]`;
-      const isLibrary = !!value && typeof value === 'object' && 'source' in value && value.source === 'library';
-      const track = this.fields(value, at, [...trackDetails, ...(isLibrary ? ['sourceId'] : ['audio'])], ['artworkUrl', 'licenseUrl', ...(isLibrary ? ['audioUrl'] : ['sourceId'])]);
+      const source = !!value && typeof value === 'object' && 'source' in value ? value.source : undefined;
+      const isLibrary = source === 'library';
+      const isCommunity = source === 'community';
+      const required = isLibrary ? ['sourceId'] : isCommunity ? ['sourceId', 'hasAudio'] : ['audio'];
+      const optional = isLibrary ? ['audioUrl'] : isCommunity ? [] : ['sourceId', 'visibility'];
+      const track = this.fields(value, at, [...trackDetails, ...required], ['artworkUrl', 'licenseUrl', ...optional]);
       if (!track) return;
       this.id(track.id, `${at}.id`);
       if (typeof track.id === 'string') { if (ids.has(track.id)) this.fail(`${at}.id`, 'Duplicate track ID in this cassette.'); ids.add(track.id); }
@@ -158,10 +186,17 @@ class Check {
       this.text(track.artist, `${at}.artist`, limits.artist, true);
       this.number(track.durationSec, `${at}.durationSec`, 0, limits.durationSec);
       this.choice(track.side, `${at}.side`, ['A', 'B']);
-      this.choice(track.source, `${at}.source`, ['library', 'upload', 'recording']);
-      if (Object.hasOwn(track, 'sourceId')) this.text(track.sourceId, `${at}.sourceId`, limits.id);
+      this.choice(track.source, `${at}.source`, ['library', 'community', 'upload', 'recording']);
+      if (isCommunity) this.id(track.sourceId, `${at}.sourceId`);
+      else if (Object.hasOwn(track, 'sourceId')) this.text(track.sourceId, `${at}.sourceId`, limits.id);
       if (isLibrary) this.choice(track.provider, `${at}.provider`, ['jamendo']);
-      else { this.choice(track.provider, `${at}.provider`, ['s3']); this.audio(track.audio, `${at}.audio`, track.source); }
+      else if (isCommunity) {
+        this.choice(track.provider, `${at}.provider`, ['explore']);
+        if (typeof track.hasAudio !== 'boolean') this.fail(`${at}.hasAudio`, 'Expected a boolean.');
+      } else {
+        this.choice(track.provider, `${at}.provider`, ['s3']); this.audio(track.audio, `${at}.audio`, track.source);
+        if (Object.hasOwn(track, 'visibility')) this.choice(track.visibility, `${at}.visibility`, visibilities);
+      }
       for (const field of ['audioUrl', 'artworkUrl', 'licenseUrl']) if (Object.hasOwn(track, field)) this.url(track[field], `${at}.${field}`);
     });
   }
@@ -218,6 +253,24 @@ export function validateCassetteDocument(value: unknown): CassetteValidationResu
     check.payload(document.payload, 'payload');
   }
   return check.finish(value, document?.payload);
+}
+
+export function validateSaveProfileRequest(value: unknown): CassetteValidationResult<SaveProfileRequest> {
+  const check = new Check();
+  const request = check.fields(value, '', ['favoriteTape']);
+  if (request && request.favoriteTape !== null) check.snapshot(request.favoriteTape, 'favoriteTape');
+  return check.finish(value);
+}
+
+export function validateProfileDocument(value: unknown): CassetteValidationResult<ProfileDocument> {
+  const check = new Check();
+  const document = check.fields(value, '', ['schemaVersion', 'updatedAt', 'favoriteTape']);
+  if (document) {
+    if (document.schemaVersion !== 1) check.fail('schemaVersion', 'Only schema version 1 is supported.');
+    check.timestamp(document.updatedAt, 'updatedAt');
+    if (document.favoriteTape !== null) check.snapshot(document.favoriteTape, 'favoriteTape');
+  }
+  return check.finish(value);
 }
 
 /**

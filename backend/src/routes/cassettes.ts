@@ -16,17 +16,21 @@ export interface CassetteApiOptions {
   authorizeAudio?: MediaAuthorizer;
 }
 
-export function createCassettesRouter(options: CassetteApiOptions = {}) {
-  const router = Router();
-  const settings = options.settings ?? config.cassettes;
-  const ready = ['memory', 'dynamodb'].includes(settings.storageMode) &&
+/** Shared by every router that stores per-user records in the cassettes table (cassettes, profile). */
+export function cassetteSettingsReady(settings: CassettesSettings): boolean {
+  return ['memory', 'dynamodb'].includes(settings.storageMode) &&
     (settings.storageMode !== 'memory' || settings.localMemoryAllowed) &&
     ['us-west-2', 'us-east-1'].includes(settings.region) &&
     typeof settings.userPoolId === 'string' && new RegExp(`^${settings.region}_[a-zA-Z0-9]+$`).test(settings.userPoolId) &&
     typeof settings.clientId === 'string' && /^[a-zA-Z0-9]{1,128}$/.test(settings.clientId) &&
     typeof settings.cursorSecret === 'string' && Buffer.byteLength(settings.cursorSecret, 'utf8') >= 32 &&
     (settings.storageMode !== 'dynamodb' || (typeof settings.tableName === 'string' && /^[a-zA-Z0-9_.-]{3,255}$/.test(settings.tableName)));
-  if (!ready) {
+}
+
+export function createCassettesRouter(options: CassetteApiOptions = {}) {
+  const router = Router();
+  const settings = options.settings ?? config.cassettes;
+  if (!cassetteSettingsReady(settings)) {
     router.use((_req, _res, next) => next(new HttpError(503, 'Cassette API is not configured for this environment.')));
     return router;
   }
