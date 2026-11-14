@@ -5,7 +5,17 @@
 
 import { useRef, useState } from 'react';
 import type { Cassette } from '@runman/shared';
-import { penFont } from './constants';
+import { SHELL_TYPES, penFont } from './constants';
+import {
+  COLOR_FAMILIES,
+  DEFAULT_FILTER,
+  SORT_OPTIONS,
+  STATUS_OPTIONS,
+  activeFilterCount,
+  filterTapes,
+  isFiltering,
+  type TapeFilter,
+} from './libraryFilter';
 import './drawer.css';
 
 interface CassetteDrawerProps {
@@ -58,6 +68,15 @@ export function CassetteDrawer({
   const pending = useRef<{ id: string; x: number; y: number; pointerId: number } | null>(null);
   const pull = useRef<PullState | null>(null);
   const [dragX, setDragX] = useState<number | null>(null);
+  const [filter, setFilter] = useState<TapeFilter>(DEFAULT_FILTER);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const shown = filterTapes(cassettes, filter, loadedId);
+  const filtering = isFiltering(filter);
+  const filterCount = activeFilterCount(filter);
+  const patchFilter = (patch: Partial<TapeFilter>) => setFilter((f) => ({ ...f, ...patch }));
+  const toggleIn = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
 
   const setRefs = (el: HTMLElement | null) => {
     ownRef.current = el;
@@ -67,7 +86,7 @@ export function CassetteDrawer({
   // ---- Pulling the drawer itself ----
   const onPullDown = (e: React.PointerEvent<HTMLElement>) => {
     if (e.button !== 0 || !ownRef.current) return;
-    if ((e.target as HTMLElement).closest('button, .spine')) return;
+    if ((e.target as HTMLElement).closest('button, input, select, .spine, .drawer-tools, .drawer-filters')) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     const width = ownRef.current.offsetWidth;
     const base = open ? 0 : width;
@@ -194,10 +213,145 @@ export function CassetteDrawer({
           <span>{cassettes.length} tapes</span>
         </header>
 
+        {/* ---- Search + filters ---- */}
+        <div className="drawer-tools">
+          <label className="drawer-search">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="6.5" />
+              <path d="M16 16l4.5 4.5" />
+            </svg>
+            <input
+              ref={searchRef}
+              type="search"
+              placeholder="Search tapes, songs, artists"
+              value={filter.query}
+              onChange={(e) => patchFilter({ query: e.target.value })}
+              onKeyDown={(e) => e.key === 'Escape' && patchFilter({ query: '' })}
+              aria-label="Search your tapes"
+            />
+            {filter.query && (
+              <button
+                type="button"
+                className="drawer-search-clear"
+                onClick={() => {
+                  patchFilter({ query: '' });
+                  searchRef.current?.focus();
+                }}
+                aria-label="Clear search"
+              >
+                ×
+              </button>
+            )}
+          </label>
+          <button
+            type="button"
+            className={`drawer-filter-btn${filtersOpen || filterCount ? ' on' : ''}`}
+            onClick={() => setFiltersOpen((o) => !o)}
+            aria-expanded={filtersOpen}
+            aria-label="Filters"
+            title="Filter and sort"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 6h16M7 12h10M10 18h4" />
+            </svg>
+            {filterCount > 0 && <span className="drawer-filter-badge">{filterCount}</span>}
+          </button>
+        </div>
+
+        {filtersOpen && (
+          <div className="drawer-filters">
+            <div className="df-group" role="radiogroup" aria-label="Show">
+              {STATUS_OPTIONS.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={filter.status === o.id}
+                  className={`df-chip${filter.status === o.id ? ' on' : ''}`}
+                  onClick={() => patchFilter({ status: o.id })}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="df-row">
+              <span className="df-label">Shell</span>
+              <div className="df-group">
+                {SHELL_TYPES.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    aria-pressed={filter.shellTypes.includes(t.id)}
+                    className={`df-chip${filter.shellTypes.includes(t.id) ? ' on' : ''}`}
+                    onClick={() => patchFilter({ shellTypes: toggleIn(filter.shellTypes, t.id) })}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="df-row">
+              <span className="df-label">Colour</span>
+              <div className="df-group">
+                {COLOR_FAMILIES.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    aria-pressed={filter.colors.includes(c.id)}
+                    aria-label={c.id}
+                    title={c.id}
+                    className={`df-dot${filter.colors.includes(c.id) ? ' on' : ''}`}
+                    style={{ background: c.swatch }}
+                    onClick={() => patchFilter({ colors: toggleIn(filter.colors, c.id) })}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="df-row">
+              <label className="df-label" htmlFor="drawer-sort">
+                Sort
+              </label>
+              <select
+                id="drawer-sort"
+                className="df-select"
+                value={filter.sort}
+                onChange={(e) => patchFilter({ sort: e.target.value as TapeFilter['sort'] })}
+              >
+                {SORT_OPTIONS.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+
+        {filtering && (
+          <p className="drawer-count">
+            Showing {shown.length} of {cassettes.length}
+            <button type="button" className="drawer-reset" onClick={() => setFilter((f) => ({ ...DEFAULT_FILTER, sort: f.sort }))}>
+              Clear
+            </button>
+          </p>
+        )}
+
         {dropHover && <div className="drawer-drop-note">Release to put it back</div>}
 
+        {shown.length === 0 && cassettes.length > 0 && (
+          <div className="drawer-empty">
+            <p>No tapes match.</p>
+            <button type="button" className="drawer-reset" onClick={() => setFilter((f) => ({ ...DEFAULT_FILTER, sort: f.sort }))}>
+              Clear search and filters
+            </button>
+          </div>
+        )}
+
         <ul className="drawer-list">
-          {cassettes.map((c) => (
+          {shown.map((c) => (
             <li
               key={c.id}
               className={`spine${activeId === c.id ? ' on-stage' : ''}`}
