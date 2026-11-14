@@ -8,6 +8,7 @@ import { LoginPage } from './pages/LoginPage';
 import { LibraryPage } from './pages/LibraryPage';
 import { EditCassettePage } from './pages/EditCassettePage';
 import { ExplorePage } from './pages/ExplorePage';
+import { ListenerPage } from './pages/ListenerPage';
 import { AboutPage } from './pages/AboutPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
@@ -33,6 +34,7 @@ export const router = createBrowserRouter([
       // The dashboard became the Account page; keep old links working.
       { path: '/dashboard', element: <Navigate to="/account" replace /> },
       { path: '/explore', element: <ExplorePage /> },
+      { path: '/explore/u/:username', element: <ListenerPage /> },
       { path: '/about', element: <AboutPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
