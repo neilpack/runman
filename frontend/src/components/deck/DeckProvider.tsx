@@ -5,7 +5,9 @@
 import { createContext, useContext, useEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import type { Cassette, TapeSide } from '@runman/shared';
 import type { DeckControl } from '@/components/cassette/CassettePlayer';
-import { useCassettes } from '@/hooks/useCassettes';
+import { useCassettes, useCassetteSync } from '@/hooks/useCassettes';
+import { DeckRecorder } from './DeckRecorder';
+import type { RecordingTarget } from '@/audio/tapeRecording';
 import { useTapeDeck, type TapeDeck } from '@/hooks/useTapeDeck';
 import { registerAudio, takeAudioFocus, watchPageMedia } from '@/audio/audioFocus';
 
@@ -28,10 +30,16 @@ const DeckContext = createContext<DeckContextValue | null>(null);
 
 export function DeckProvider({ children }: { children: ReactNode }) {
   const cassettes = useCassettes();
+  const sync = useCassetteSync();
+  const [recordingTarget, setRecordingTarget] = useState<RecordingTarget>();
   const [loadedId, setLoadedId] = useState<string | null>(null);
   const [side, setSide] = useState<TapeSide>('A');
   const loaded = loadedId ? cassettes.find((c) => c.id === loadedId) : undefined;
   const deck = useTapeDeck(loaded, side);
+
+  useEffect(() => {
+    if (recordingTarget && (recordingTarget.context !== sync.context || recordingTarget.cassetteId !== loadedId || recordingTarget.side !== side || !loaded)) setRecordingTarget(undefined);
+  }, [recordingTarget, sync.context, loadedId, side, loaded]);
 
   // If the tape in the deck is deleted (here or in another tab), take it out.
   useEffect(() => {
@@ -50,6 +58,13 @@ export function DeckProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const control = (key: DeckControl) => {
+    if (key === 'record') {
+      if (!loaded || recordingTarget) return;
+      takeAudioFocus('recording');
+      deck.press('stop');
+      setRecordingTarget({ cassetteId: loaded.id, side, context: sync.context });
+      return;
+    }
     const keys = deck.latched;
     // PLAY, or PAUSE releasing a paused tape, is about to make sound.
     if (key === 'play' || (key === 'pause' && keys.includes('pause') && keys.includes('play'))) takeAudioFocus('deck');
@@ -61,6 +76,7 @@ export function DeckProvider({ children }: { children: ReactNode }) {
   return (
     <DeckContext.Provider value={{ loaded, loadedId, setLoadedId, side, setSide, deck, control }}>
       {children}
+      {recordingTarget && <DeckRecorder key={`${recordingTarget.context}:${recordingTarget.cassetteId}:${recordingTarget.side}`} target={recordingTarget} onClose={() => setRecordingTarget(undefined)} />}
     </DeckContext.Provider>
   );
 }

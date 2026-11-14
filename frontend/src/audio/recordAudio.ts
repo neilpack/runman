@@ -15,11 +15,12 @@ export interface RecorderHandle {
 export interface RecordingDependencies {
   getMicrophone(): Promise<{ release(): void; recorder(type: string): RecorderHandle }>;
   supports(type: string): boolean;
+  now?(): number;
 }
 
 export interface AudioRecording {
   result: Promise<Blob>;
-  /** Wall-clock duration captured while MediaRecorder was running. */
+  /** Elapsed duration captured while MediaRecorder was running. */
   readonly durationSec: number;
   stop(): void;
   cancel(): void;
@@ -81,6 +82,8 @@ export async function recordAudio(
   let settled = false;
   let stopping = false;
   let startedAt = 0;
+  let stoppedAt: number | undefined;
+  const now = deps.now ?? (() => performance.now());
   let durationSec = 0;
   let resolve!: (value: Blob) => void;
   let reject!: (error: Error) => void;
@@ -108,6 +111,7 @@ export async function recordAudio(
   function stop() {
     if (settled || stopping || recorder.state === 'inactive') return;
     stopping = true;
+    stoppedAt = now();
     try { recorder.stop(); } catch { fail(new Error('Recording could not be stopped. Please try again.')); }
   }
   recorder.ondataavailable = ({ data }) => {
@@ -127,12 +131,12 @@ export async function recordAudio(
     const data = new Blob(chunks, { type: recorder.mimeType || type });
     // MediaRecorder WebM blobs often have no usable duration metadata. The
     // elapsed recorder time is reliable for tape capacity and persistence.
-    durationSec = Math.max(0.1, (Date.now() - startedAt) / 1000);
+    durationSec = Math.max(0.1, ((stoppedAt ?? now()) - startedAt) / 1000);
     settled = true;
     cleanup();
     resolve(data);
   };
   signal.addEventListener('abort', cancel, { once: true });
-  try { startedAt = Date.now(); recorder.start(1000); } catch { fail(new Error('Recording could not start. Check microphone access and try again.')); }
+  try { startedAt = now(); recorder.start(1000); } catch { fail(new Error('Recording could not start. Check microphone access and try again.')); }
   return { result, get durationSec() { return durationSec; }, stop, cancel };
 }
