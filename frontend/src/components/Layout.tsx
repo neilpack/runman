@@ -1,9 +1,10 @@
 import { NavLink, Outlet } from 'react-router';
 
 const NAV_LINKS = [
-  { to: '/', label: 'Home' },
+  { to: '/', label: 'Library' },
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/about', label: 'About' },
+  { to: '/status', label: 'Status' },
 ];
 
 export function Layout() {

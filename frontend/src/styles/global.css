@@ -232,3 +232,29 @@ a {
     align-items: flex-start;
   }
 }
+
+/* Cassette studio (Library + Edit pages): dark, full-width scenes. */
+.studio {
+  --studio-bg: #1c1c1f;
+  --studio-bg-2: #2a2a2e;
+  --studio-panel: #18181b;
+  --studio-panel-2: #232327;
+  --studio-text: #e4e4e7;
+  --studio-muted: #8b8b94;
+  --studio-accent: #f43f5e;
+  --studio-wood: #9a5a06;
+  --studio-wood-dark: #6e3f03;
+  color: var(--studio-text);
+  background: radial-gradient(ellipse at 30% 20%, var(--studio-bg-2), var(--studio-bg) 70%);
+}
+
+.app-main:has(> .studio) {
+  max-width: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-shell:has(.studio) .app-footer {
+  display: none;
+}
