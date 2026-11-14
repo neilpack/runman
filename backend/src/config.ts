@@ -3,21 +3,29 @@
 // Jamendo documents this client ID for read-only API testing. It keeps local setup
 // friction-free for teammates; deployed environments must provide our own client ID.
 const localJamendoTestClientId = '709fa152';
-const isDeployed = Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME) || process.env.NODE_ENV === 'production';
 
-export const config = {
-  port: Number(process.env.PORT ?? 4000),
-  corsOrigins: (process.env.CORS_ORIGINS ?? 'http://localhost:5173')
-    .split(',')
-    .map((o) => o.trim())
-    .filter(Boolean),
-  aws: {
-    region: process.env.AWS_REGION ?? 'us-east-1',
-    itemsTable: process.env.ITEMS_TABLE || undefined,
-    uploadsBucket: process.env.UPLOADS_BUCKET || undefined,
-  },
-  jamendo: {
-    clientId: process.env.JAMENDO_CLIENT_ID || (isDeployed ? undefined : localJamendoTestClientId),
-    apiUrl: process.env.JAMENDO_API_URL ?? 'https://api.jamendo.com/v3.0',
-  },
-} as const;
+export function readConfig(env: NodeJS.ProcessEnv) {
+  const cloudExecution =
+    env.AWS_LAMBDA_FUNCTION_NAME !== undefined || env.AWS_EXECUTION_ENV !== undefined || env.LAMBDA_TASK_ROOT !== undefined;
+  const isDeployed = Boolean(env.AWS_LAMBDA_FUNCTION_NAME) || env.NODE_ENV === 'production';
+
+  return {
+    port: Number(env.PORT ?? 4000),
+    corsOrigins: (env.CORS_ORIGINS ?? 'http://localhost:5173')
+      .split(',')
+      .map((o) => o.trim())
+      .filter(Boolean),
+    legacyExamplesEnabled: env.NODE_ENV === 'development' && env.ENABLE_LEGACY_EXAMPLES === 'true' && !cloudExecution,
+    aws: {
+      region: env.AWS_REGION ?? 'us-east-1',
+      itemsTable: env.ITEMS_TABLE || undefined,
+      uploadsBucket: env.UPLOADS_BUCKET || undefined,
+    },
+    jamendo: {
+      clientId: env.JAMENDO_CLIENT_ID || (isDeployed ? undefined : localJamendoTestClientId),
+      apiUrl: env.JAMENDO_API_URL ?? 'https://api.jamendo.com/v3.0',
+    },
+  } as const;
+}
+
+export const config = readConfig(process.env);
