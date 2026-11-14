@@ -28,17 +28,16 @@ const service = createAccountService(
 export const accountStore = createAccountStore(service, sessionStore);
 accountStore.start();
 
-// Keep an already-published Explore profile in step with account edits. `ifPublished` means this
-// never puts someone on Explore who hasn't shared anything (publicSync publishes it the first time).
+// Every listener with a username is on Explore (Listeners), even before sharing a tape: publish the
+// profile once when the account loads (signup sets the username), then again whenever it changes.
 let lastPublished: string | null = null;
 accountStore.subscribe(() => {
   const { status, profile } = accountStore.getSnapshot();
   if (status !== 'ready' || !profile?.hasUsername) { lastPublished = null; return; }
   const input = { username: profile.username, avatar: profile.avatar, favoriteTape: profile.favoriteTape };
   const key = `${profile.userId}\n${JSON.stringify(input)}`;
-  if (lastPublished === null) { lastPublished = key; return; }
   if (key === lastPublished) return;
   lastPublished = key;
-  void api.publish.publishProfile({ ...input, ifPublished: true })
+  void api.publish.publishProfile(input)
     .catch((error: unknown) => console.error('[account] Explore profile update failed', error));
 });

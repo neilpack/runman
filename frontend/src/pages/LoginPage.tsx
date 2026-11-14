@@ -5,7 +5,20 @@ import { AuthHeader } from '@/components/AuthHeader';
 import { createAuthFlow, type AuthMode } from '@/auth/authFlow';
 import { sessionStore } from '@/auth/session';
 import { LANDING_PATH, useSession } from '@/hooks/useSession';
+import { api, ApiRequestError } from '@/api/client';
+import { USERNAME_MAX, USERNAME_MIN } from '@/profile/profileModel';
 import '@/styles/auth.css';
+
+/** A 404 from the public listener lookup means nobody on Explore has the name yet. */
+async function isUsernameTaken(username: string): Promise<boolean> {
+  try {
+    await api.listener(username);
+    return true;
+  } catch (error) {
+    if (error instanceof ApiRequestError && error.status === 404) return false;
+    throw error;
+  }
+}
 
 const headings: Record<AuthMode, [string, string, string]> = {
   login: ['Welcome back', 'Log in to pick up where you left off.', 'Log in'],
@@ -17,12 +30,14 @@ const headings: Record<AuthMode, [string, string, string]> = {
 
 function LoginForm({ initialMode }: { initialMode: AuthMode }) {
   const session = useSession();
-  const [flow] = useState(() => createAuthFlow(auth, sessionStore, initialMode));
+  const [flow] = useState(() => createAuthFlow(auth, sessionStore, initialMode, { isUsernameTaken }));
   const state = useSyncExternalStore(flow.subscribe, flow.getSnapshot, flow.getSnapshot);
   useLayoutEffect(() => { flow.activate(); return () => flow.dispose(); }, [flow]);
   const [title, subtitle, submitText] = headings[state.mode];
   const hasCode = state.mode === 'confirmSignup' || state.mode === 'confirmReset';
   const hasPassword = state.mode === 'login' || state.mode === 'signup' || state.mode === 'confirmReset';
+  const isSignup = state.mode === 'signup';
+  const hasConfirmPassword = isSignup || state.mode === 'confirmReset';
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -31,6 +46,8 @@ function LoginForm({ initialMode }: { initialMode: AuthMode }) {
       email: String(fields.get('email') ?? state.email),
       password: String(fields.get('password') ?? ''),
       code: String(fields.get('code') ?? ''),
+      username: String(fields.get('username') ?? ''),
+      confirmPassword: String(fields.get('confirmPassword') ?? ''),
     });
   }
 
@@ -52,6 +69,12 @@ function LoginForm({ initialMode }: { initialMode: AuthMode }) {
                   <input className="login-input" type="email" name="email" autoComplete="username" defaultValue={state.email} required />
                 </label>
               ) : <p className="login-account">{state.email}</p>}
+              {isSignup && (
+                <label className="login-field"><span>Username</span>
+                  <input className="login-input" type="text" name="username" autoComplete="nickname" spellCheck={false} autoCapitalize="none" minLength={USERNAME_MIN} maxLength={USERNAME_MAX} required aria-describedby="username-help" />
+                </label>
+              )}
+              {isSignup && <p id="username-help" className="login-help">How other listeners find you on Explore. {USERNAME_MIN}–{USERNAME_MAX} letters, numbers, dots, dashes or underscores.</p>}
               {hasCode && (
                 <label className="login-field"><span>{state.mode === 'confirmReset' ? 'Reset code' : 'Confirmation code'}</span>
                   <input className="login-input" type="text" inputMode="numeric" name="code" autoComplete="one-time-code" required />
@@ -60,6 +83,11 @@ function LoginForm({ initialMode }: { initialMode: AuthMode }) {
               {hasPassword && (
                 <label className="login-field"><span>{state.mode === 'confirmReset' ? 'New password' : 'Password'}</span>
                   <input className="login-input" type="password" name="password" autoComplete={state.mode === 'login' ? 'current-password' : 'new-password'} minLength={state.mode === 'login' ? undefined : 8} required aria-describedby={state.mode === 'login' ? undefined : 'password-help'} />
+                </label>
+              )}
+              {hasConfirmPassword && (
+                <label className="login-field"><span>{state.mode === 'confirmReset' ? 'Confirm new password' : 'Confirm password'}</span>
+                  <input className="login-input" type="password" name="confirmPassword" autoComplete="new-password" minLength={8} required />
                 </label>
               )}
               {hasPassword && state.mode !== 'login' && <p id="password-help" className="login-help">At least 8 characters: uppercase, lowercase, number, and symbol.</p>}

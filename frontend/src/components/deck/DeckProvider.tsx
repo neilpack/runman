@@ -4,6 +4,7 @@
 
 import { createContext, useContext, useEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import type { Cassette, TapeSide } from '@runman/shared';
+import { useLocation } from 'react-router';
 import type { DeckControl } from '@/components/cassette/CassettePlayer';
 import { useCassettes, useCassetteSync } from '@/hooks/useCassettes';
 import { DeckRecorder } from './DeckRecorder';
@@ -19,6 +20,9 @@ interface DeckContextValue {
   side: TapeSide;
   setSide: Dispatch<SetStateAction<TapeSide>>;
   deck: TapeDeck;
+  recordingTarget?: RecordingTarget;
+  closeRecorder(): void;
+  recordingStopped(): void;
   /**
    * A transport key pressed on any Walkman. FLIP turns the tape over and EJECT takes it out of
    * the deck (the Library then also puts it back on the stage).
@@ -31,6 +35,7 @@ const DeckContext = createContext<DeckContextValue | null>(null);
 export function DeckProvider({ children }: { children: ReactNode }) {
   const cassettes = useCassettes();
   const sync = useCassetteSync();
+  const { pathname } = useLocation();
   const [recordingTarget, setRecordingTarget] = useState<RecordingTarget>();
   const [loadedId, setLoadedId] = useState<string | null>(null);
   const [side, setSide] = useState<TapeSide>('A');
@@ -61,7 +66,8 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     if (key === 'record') {
       if (!loaded || recordingTarget) return;
       takeAudioFocus('recording');
-      deck.press('stop');
+      // Keep the REC key latched while DeckRecorder owns the microphone.
+      deck.press('record');
       setRecordingTarget({ cassetteId: loaded.id, side, context: sync.context });
       return;
     }
@@ -73,10 +79,22 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     if (key === 'eject') setLoadedId(null);
   };
 
+  const closeRecorder = () => {
+    deck.press('stop');
+    setRecordingTarget(undefined);
+  };
+
+  const recordingStopped = () => deck.press('stop');
+
   return (
-    <DeckContext.Provider value={{ loaded, loadedId, setLoadedId, side, setSide, deck, control }}>
+    <DeckContext.Provider value={{ loaded, loadedId, setLoadedId, side, setSide, deck, control, recordingTarget, closeRecorder, recordingStopped }}>
       {children}
-      {recordingTarget && <DeckRecorder key={`${recordingTarget.context}:${recordingTarget.cassetteId}:${recordingTarget.side}`} target={recordingTarget} onClose={() => setRecordingTarget(undefined)} />}
+      {recordingTarget && pathname !== '/library' && <DeckRecorder
+        key={`${recordingTarget.context}:${recordingTarget.cassetteId}:${recordingTarget.side}`}
+        target={recordingTarget}
+        onClose={closeRecorder}
+        onRecordingStopped={recordingStopped}
+      />}
     </DeckContext.Provider>
   );
 }
