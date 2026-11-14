@@ -2,22 +2,25 @@
   position: fixed;
   z-index: 200;
   inset: 0;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
   padding: var(--space-4);
-  background: rgb(0 0 0 / 68%);
+  background: rgb(0 0 0 / 28%);
 }
 
 .record-dialog {
-  width: min(560px, 100%);
+  width: min(440px, 100%);
   max-height: min(760px, calc(100vh - 32px));
   overflow: auto;
   padding: var(--space-5);
-  border: 1px solid rgb(244 63 94 / 42%);
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-width: 1px;
   border-radius: var(--radius-lg);
   background: linear-gradient(180deg, var(--studio-panel-2), var(--studio-panel));
   color: var(--studio-text);
   box-shadow: 0 24px 80px rgb(0 0 0 / 55%);
+  transform: translateX(clamp(180px, 22vw, 310px));
 }
 
 .record-dialog-head {
@@ -45,10 +48,34 @@
   font-size: 0.82rem;
   line-height: 1.45;
 }
+.record-capacity-warning {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.record-capacity-warning p {
+  margin: 0;
+  color: #fda4af;
+  line-height: 1.5;
+}
+.record-side-notice {
+  margin: var(--space-3) 0 0;
+  color: #ffd7b5;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
 .record-dialog .audio-input { color: var(--studio-text); }
 .record-dialog .audio-input .muted { color: var(--studio-muted); }
 .record-dialog .audio-input [role='status'] { min-height: 1.35em; color: #ffd7b5; }
 .record-dialog .audio-input .error { color: #fda4af; }
+.record-dialog .recording-name-field { color: var(--studio-text); }
+.record-dialog .recording-name-field .input {
+  border-color: rgb(255 255 255 / 16%);
+  background: #0f0f11;
+  color: var(--studio-text);
+}
+.record-dialog .recording-name-field .input::placeholder { color: var(--studio-muted); }
+.record-dialog .recording-name-field .input:focus { outline-color: var(--studio-accent); }
 .record-dialog .audio-file-picker {
   border-color: rgb(255 122 26 / 65%);
   background: rgb(255 122 26 / 9%);
@@ -93,7 +120,20 @@
 .record-dialog-close:hover { color: var(--studio-text); }
 
 @media (max-width: 600px) {
-  .record-dialog { padding: var(--space-4); }
+  .record-dialog-backdrop {
+    align-items: flex-end;
+    padding: 0;
+    background: rgb(0 0 0 / 55%);
+  }
+  .record-dialog {
+    width: 100%;
+    height: auto;
+    max-height: 92vh;
+    padding: var(--space-4);
+    border-width: 1px 0 0;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    transform: none;
+  }
   .record-dialog .audio-actions { flex-direction: column; }
   .record-dialog .audio-actions .btn { width: 100%; }
 }

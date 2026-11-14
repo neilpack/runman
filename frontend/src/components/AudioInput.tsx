@@ -19,6 +19,8 @@ interface AudioInputProps {
   limitLabel?: string;
   autoRecord?: boolean;
   recordingOnly?: boolean;
+  uploadLabel?: string;
+  onRecordingStopped?: () => void;
 }
 
 function clock(sec: number): string {
@@ -45,7 +47,7 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Audio could not be processed. Please try again.';
 }
 
-export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel = 'This tape', autoRecord = false, recordingOnly = false }: AudioInputProps) {
+export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel = 'This tape', autoRecord = false, recordingOnly = false, uploadLabel = 'Upload audio', onRecordingStopped }: AudioInputProps) {
   const id = useId();
   const [draft, setDraft] = useState<DraftAudio>();
   const [preview, setPreview] = useState<string>();
@@ -148,7 +150,10 @@ export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel 
       recording.current = session;
       setStatus('recording');
       const data = await session.result;
-      if (current()) selectDraft({ data, name: 'Microphone recording', source: 'recording', durationSec: session.durationSec });
+      if (current()) {
+        onRecordingStopped?.();
+        selectDraft({ data, name: 'Microphone recording', source: 'recording', durationSec: session.durationSec });
+      }
     } catch (cause) {
       if (current()) setError(errorMessage(cause));
     } finally {
@@ -269,6 +274,19 @@ export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel 
         {status === 'uploading' && `Uploading: ${((progress?.transferredBytes ?? 0) / 1_000_000).toFixed(2)} MB`}
         {status === 'idle' && uploaded && (adopted ? 'Audio added to this draft. Save the cassette to keep it.' : 'Upload finished. Add this audio to your cassette.')}
       </p>
+      {draft?.source === 'recording' && status === 'idle' && (
+        <label className="recording-name-field">
+          <span>Name this recording</span>
+          <input
+            className="input"
+            type="text"
+            value={draft.name}
+            maxLength={120}
+            placeholder="Microphone recording"
+            onChange={(event) => setDraft((current) => current ? { ...current, name: event.target.value } : current)}
+          />
+        </label>
+      )}
       {draft && <div className="audio-preview">
         <p>{draft.name} · {(draft.data.size / 1_000_000).toFixed(2)} MB</p>
         <audio
@@ -292,7 +310,7 @@ export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel 
         </div>
       )}
       {canUpload && draft && <div className="audio-actions">
-        {!uploaded && <Button type="button" disabled={busy || tooLong || !getMediaAccount()} onClick={() => { void uploadDraft(); }}>{retryCompletion ? 'Retry verification' : 'Upload audio'}</Button>}
+        {!uploaded && <Button type="button" disabled={busy || tooLong || !getMediaAccount()} onClick={() => { void uploadDraft(); }}>{retryCompletion ? 'Retry verification' : uploadLabel}</Button>}
         {status === 'uploading' && <Button type="button" variant="secondary" onClick={() => { controller.current?.abort(); upload.current?.cancel(); }}>Cancel upload</Button>}
         {uploaded && <Button type="button" disabled={adopted || busy || durationSec <= 0 || tooLong} onClick={() => {
           // Keep the reference if adoption fails; retry is safe by object key.
