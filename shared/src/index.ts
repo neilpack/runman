@@ -72,8 +72,11 @@ export interface Track {
   artist: string;
   durationSec: number;
   side: TapeSide;
-  /** Where the audio comes from: Jamendo, a user upload, or a recording. */
-  source: 'library' | 'upload' | 'recording';
+  /**
+   * Where the audio comes from: Jamendo, your own upload, a recording, or a song another
+   * listener shared publicly (found on Explore; `sourceId` is its PublicSong id).
+   */
+  source: 'library' | 'upload' | 'recording' | 'community';
   /** Playable URL once the song library / recordings exist. */
   audioUrl?: string;
   /** Durable reference for user audio; playback URLs are generated separately. */
@@ -127,4 +130,83 @@ export interface MusicSearchResponse {
   total: number;
   offset: number;
   limit: number;
+}
+
+// ---------------------------------------------------------------------------
+// Explore: songs listeners made public, and listener profiles
+// ---------------------------------------------------------------------------
+
+/**
+ * A tape's look, frozen when it was picked as a favorite. Other listeners see this snapshot,
+ * never your private library (tracks/audio are deliberately not included).
+ */
+export type TapeSnapshot = Pick<
+  Cassette,
+  'id' | 'name' | 'shellColor' | 'labelColor' | 'inkColor' | 'shellType' | 'penStyle' | 'stickers' | 'sideB' | 'updatedAt'
+> & { trackCount: number };
+
+/** What other listeners can see on your profile. */
+export interface PublicProfile {
+  userId: string;
+  username: string;
+  /** Safe image URL (https or a small base64 data URL), or null for the initials fallback. */
+  avatar: string | null;
+  /** The mixtape on display. */
+  favoriteTape: TapeSnapshot | null;
+}
+
+/**
+ * Where Explore data came from:
+ * - 's3': public songs/profiles in the uploads bucket
+ * - 'demo': built-in sample data (local dev with no bucket configured)
+ * - 'empty': deployed without a bucket, so nothing to show
+ */
+export type ExploreCatalog = 's3' | 'demo' | 'empty';
+
+/** A song a listener uploaded and made public. */
+export interface PublicSong {
+  id: string;
+  title: string;
+  artist: string;
+  durationSec: number;
+  uploader: { userId: string; username: string };
+  artworkUrl?: string;
+  /** True when audio streams from GET /api/explore/songs/:id/audio (a stable URL; safe to store on a Track). */
+  hasAudio: boolean;
+  /** How many times listeners added it to a tape. Feeds trending. */
+  addCount: number;
+  publishedAt: string;
+}
+
+/** GET /api/explore/songs?q=&limit=&offset= — all public songs, or matches for `q`. */
+export interface PublicSongPage {
+  songs: PublicSong[];
+  total: number;
+  offset: number;
+  limit: number;
+  catalog: ExploreCatalog;
+}
+
+/** GET /api/explore/songs/trending — the top 5. */
+export interface TrendingSongsResponse {
+  songs: PublicSong[];
+  catalog: ExploreCatalog;
+}
+
+export interface ListenerSummary extends PublicProfile {
+  songCount: number;
+}
+
+/** GET /api/explore/profiles?q= — username search. */
+export interface ListenerSearchResponse {
+  profiles: ListenerSummary[];
+  total: number;
+  catalog: ExploreCatalog;
+}
+
+/** GET /api/explore/profiles/:username — a listener's page. */
+export interface ListenerProfileResponse {
+  profile: PublicProfile;
+  songs: PublicSong[];
+  catalog: ExploreCatalog;
 }

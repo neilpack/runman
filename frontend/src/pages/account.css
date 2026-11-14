@@ -1,4 +1,4 @@
-/* Account + Explore pages. Uses theme tokens from styles/global.css. */
+/* Account page. Uses theme tokens from styles/global.css. */
 
 .account-header {
   display: flex;
@@ -234,21 +234,6 @@
   color: #fff;
   font-size: 0.7rem;
   font-weight: 600;
-}
-
-/* Explore */
-.explore-you {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.explore-you .card-title {
-  margin: 0;
-}
-
-.explore-you p {
-  margin: 0;
 }
 
 .sr-only {
