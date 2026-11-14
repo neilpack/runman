@@ -1,0 +1,351 @@
+/* RunMan portable cassette player. Fixed 340px design; scaled down with `zoom` on phones. */
+.walkman-wrap {
+  --wm-orange: #ff7a1a;
+  --wm-metal-1: #3d4f7a;
+  --wm-metal-2: #1f2a44;
+  position: relative;
+  width: 340px;
+  margin-right: 180px; /* room for the headphones */
+  padding-top: 8px;
+}
+
+.walkman {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---- Headphones + cord ---- */
+.wm-phones {
+  position: absolute;
+  left: 334px; /* cord starts right at the jack */
+  top: 8px;
+  width: 220px;
+  height: 300px;
+  overflow: visible;
+  pointer-events: none;
+  filter: drop-shadow(0 14px 14px rgba(0, 0, 0, 0.45));
+  z-index: 0;
+}
+
+/* ---- Transport keys on the top edge ---- */
+.wm-keys {
+  position: relative;
+  z-index: 0;
+  display: flex;
+  gap: 4px;
+  padding: 0 18px;
+  height: 46px;
+  margin-bottom: -14px; /* body overlaps the key stems */
+}
+
+.wm-key {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 1px;
+  padding-top: 5px;
+  border: none;
+  border-radius: 7px 7px 2px 2px;
+  background: linear-gradient(180deg, #f4f4f5, #a1a1aa);
+  color: #27272a;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgba(0, 0, 0, 0.15);
+  font: inherit;
+  font-size: 0.5rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: transform 0.08s;
+  touch-action: manipulation;
+}
+
+.wm-key svg {
+  width: 15px;
+  height: 15px;
+  transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.wm-key:active:not(:disabled),
+.wm-key.latched {
+  transform: translateY(8px);
+}
+
+.wm-key-record {
+  color: #dc2626;
+}
+
+.wm-key-flip {
+  background: linear-gradient(180deg, #ffb057, var(--wm-orange));
+  color: #3b1500;
+}
+
+.wm-key:disabled {
+  cursor: not-allowed;
+  filter: brightness(0.7);
+}
+
+/* ---- Body ---- */
+.wm-body {
+  position: relative;
+  padding: 14px 18px 18px;
+  border-radius: 26px;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 3px),
+    linear-gradient(165deg, var(--wm-metal-1), var(--wm-metal-2));
+  box-shadow:
+    0 30px 60px rgba(0, 0, 0, 0.55),
+    inset 0 2px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.3);
+  color: #e5e7eb;
+}
+
+.wm-jack {
+  position: absolute;
+  right: -9px;
+  top: 94px;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: linear-gradient(#e5e7eb, #6b7280);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.wm-wheel {
+  position: absolute;
+  right: -6px;
+  top: 150px;
+  width: 10px;
+  height: 64px;
+  border-radius: 4px;
+  background: repeating-linear-gradient(180deg, #52525b 0 3px, #a1a1aa 3px 5px);
+  box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.6);
+}
+
+.wm-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.wm-logo {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+}
+
+.wm-logo strong {
+  font-size: 1.35rem;
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.wm-logo small {
+  font-size: 0.5rem;
+  letter-spacing: 0.3em;
+  color: #a5b4cf;
+}
+
+/* Big A/B side lamp, right where you look first */
+.wm-side {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.45);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.wm-side span {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  font-weight: 900;
+  font-size: 1rem;
+  color: #52525b;
+  transition:
+    background 0.3s,
+    color 0.3s,
+    box-shadow 0.3s;
+}
+
+.wm-side span.on {
+  background: var(--wm-orange);
+  color: #2a1000;
+  box-shadow: 0 0 14px rgba(255, 122, 26, 0.7);
+}
+
+.wm-side.off span.on {
+  background: transparent;
+  color: #52525b;
+  box-shadow: none;
+}
+
+.wm-stripe {
+  height: 4px;
+  margin: 10px -18px 14px;
+  background: linear-gradient(90deg, var(--wm-orange) 0 60%, #fbbf24 60% 80%, #f43f5e 80%);
+}
+
+/* ---- Tape door ---- */
+.wm-door {
+  position: relative;
+  aspect-ratio: 100 / 68;
+  border-radius: 16px;
+  padding: 8px;
+  background: linear-gradient(160deg, #d4d4d8, #71717a);
+  box-shadow:
+    0 2px 0 rgba(255, 255, 255, 0.15),
+    inset 0 2px 4px rgba(0, 0, 0, 0.5);
+  transition:
+    box-shadow 0.2s,
+    transform 0.2s;
+}
+
+.wm-door::before {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border-radius: 10px;
+  background: radial-gradient(ellipse at top, #24242a, #09090b);
+  box-shadow: inset 0 6px 16px rgba(0, 0, 0, 0.9);
+}
+
+/* glass glare over the tape */
+.wm-door::after {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border-radius: 10px;
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.16) 0 18%, transparent 18% 32%, rgba(255, 255, 255, 0.07) 32% 38%, transparent 38%);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.wm-door.empty {
+  display: grid;
+  place-items: center;
+}
+
+.wm-door.empty::after {
+  content: 'INSERT TAPE';
+  display: grid;
+  place-items: center;
+  border: 2px dashed #3f3f46;
+  inset: 22px;
+  font-size: 0.7rem;
+  letter-spacing: 0.35em;
+  color: #6b7280;
+  background: none;
+}
+
+.wm-door.drop-hover {
+  transform: scale(1.03);
+  box-shadow:
+    0 0 0 3px var(--wm-orange),
+    0 0 34px rgba(255, 122, 26, 0.6);
+}
+
+.wm-door.drop-hover::after {
+  border-color: var(--wm-orange);
+  color: var(--wm-orange);
+}
+
+.wm-tape {
+  position: absolute;
+  inset: 8px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  container-type: inline-size;
+  animation: wm-insert 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes wm-insert {
+  from {
+    transform: translateY(-60%) scale(0.9);
+    opacity: 0;
+  }
+}
+
+/* ---- Foot: eject + LCD ---- */
+.wm-foot {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.wm-eject {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffb057, var(--wm-orange));
+  color: #2a1000;
+  box-shadow:
+    0 4px 0 #a34400,
+    0 6px 10px rgba(0, 0, 0, 0.4);
+  font: inherit;
+  font-size: 0.65rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition:
+    transform 0.06s,
+    box-shadow 0.06s;
+}
+
+.wm-eject svg {
+  width: 16px;
+  height: 16px;
+}
+
+.wm-eject:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow:
+    0 1px 0 #a34400,
+    0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.wm-eject:disabled {
+  filter: grayscale(0.7) brightness(0.6);
+  cursor: not-allowed;
+}
+
+.wm-lcd {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 10px;
+  border-radius: 10px;
+  background: #0b1208;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.9);
+  font-family: 'Space Mono', ui-monospace, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.2em;
+  text-align: center;
+  color: #a3e635;
+  text-shadow: 0 0 6px rgba(163, 230, 53, 0.6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wm-lcd.idle {
+  color: #3f4a3a;
+  text-shadow: none;
+}
+
+@media (max-width: 760px) {
+  .walkman-wrap {
+    zoom: 0.62;
+  }
+}

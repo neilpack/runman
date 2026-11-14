@@ -56,7 +56,9 @@ the locked dependencies for all workspaces.
 | Existing backend AWS helpers | AWS SDK v3 DynamoDB/S3 clients, document client, and S3 presigner |
 | Music search and audio | Browser `fetch`, audio/Web Audio, and MediaRecorder APIs; no extra library required |
 
-Set `VITE_JAMENDO_CLIENT_ID` in `frontend/.env.local` (see the example file).
+Set `JAMENDO_CLIENT_ID` in `backend/.env` (see `backend/.env.example`). The backend proxies
+Jamendo searches so the client ID is not included in the browser bundle. The frontend calls
+`GET /api/music/search?q=...`.
 AWS runtime access also needs generated backend outputs and Amplify configuration;
 packages alone do not provision resources. Identity implementation is a separate change.
 Do not put AWS credentials in frontend code or commit generated outputs.

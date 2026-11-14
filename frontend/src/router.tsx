@@ -5,6 +5,8 @@ import { Layout } from './components/Layout';
 import { WelcomePage } from './pages/WelcomePage';
 import { LoginPage } from './pages/LoginPage';
 import { HomePage } from './pages/HomePage';
+import { LibraryPage } from './pages/LibraryPage';
+import { EditCassettePage } from './pages/EditCassettePage';
 import { DashboardPage } from './pages/DashboardPage';
 import { AboutPage } from './pages/AboutPage';
 import { NotFoundPage } from './pages/NotFoundPage';
@@ -16,7 +18,9 @@ export const router = createBrowserRouter([
   {
     element: <Layout />,
     children: [
-      { path: '/home', element: <HomePage /> },
+      { path: '/library', element: <LibraryPage /> },
+      { path: '/cassettes/:id/edit', element: <EditCassettePage /> },
+      { path: '/status', element: <HomePage /> },
       { path: '/dashboard', element: <DashboardPage /> },
       { path: '/about', element: <AboutPage /> },
       { path: '*', element: <NotFoundPage /> },

@@ -1,0 +1,215 @@
+.library {
+  flex: 1;
+  display: flex;
+}
+
+.stage {
+  --drawer-space: 0px;
+  position: relative;
+  flex: 1;
+  min-height: calc(100vh - 62px);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.stage.drawer-open {
+  --drawer-space: 290px;
+}
+
+.stage.rotating {
+  cursor: grabbing;
+}
+
+.stage-hint {
+  position: absolute;
+  top: 14px;
+  left: 24px;
+  right: calc(var(--drawer-space) + 24px);
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--studio-muted);
+  pointer-events: none;
+  transition: right 0.45s;
+}
+
+.stage-grid {
+  min-height: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0;
+  padding: 72px calc(var(--drawer-space) + 64px) 120px 56px;
+  transition: padding 0.45s cubic-bezier(0.34, 1.3, 0.64, 1);
+}
+
+/* The spot on the "floor" where a tape rests. */
+.pedestal {
+  height: 280px;
+  display: grid;
+  place-items: center;
+}
+
+.pedestal-ring {
+  width: 260px;
+  height: 70px;
+  margin-top: 150px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(244, 63, 94, 0.18), transparent 70%);
+  border: 2px dashed rgba(255, 255, 255, 0.12);
+  transition: opacity 0.3s;
+}
+
+.pedestal.occupied .pedestal-ring {
+  border-color: transparent;
+}
+
+/* ---- The floating, draggable cassette ---- */
+.floater {
+  position: absolute;
+  z-index: 30;
+  perspective: 900px;
+  transform: translate(-50%, -50%);
+  cursor: grab;
+  touch-action: none;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.floater.held {
+  cursor: grabbing;
+  transform: translate(-50%, -50%) translateY(-18px) scale(1.12);
+}
+
+.floater-bob,
+.floater-land,
+.floater-tilt {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+
+.floater-bob.bobbing {
+  animation: floater-bob 3.4s ease-in-out infinite;
+}
+
+.floater-land {
+  animation: floater-land 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.floater-tilt {
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes floater-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotateZ(0deg);
+  }
+  50% {
+    transform: translateY(-10px) rotateZ(-1.5deg);
+  }
+}
+
+@keyframes floater-land {
+  0% {
+    transform: scale(1.1, 0.88);
+  }
+  45% {
+    transform: scale(0.95, 1.06);
+  }
+  100% {
+    transform: scale(1, 1);
+  }
+}
+
+.floater-shadow {
+  position: absolute;
+  z-index: 29;
+  height: 26px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(0, 0, 0, 0.6), transparent 70%);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition:
+    transform 0.3s,
+    opacity 0.3s;
+}
+
+.floater-shadow.lifted {
+  transform: translate(-50%, -50%) scale(0.7);
+  opacity: 0.45;
+}
+
+/* ---- "Drop here to edit" pad, shown only while a tape is held ---- */
+.edit-anchor {
+  position: absolute;
+  z-index: 25;
+  bottom: 24px;
+  left: calc((100% - var(--drawer-space)) / 2);
+  transform: translateX(-50%);
+  transition: left 0.45s;
+  pointer-events: none;
+}
+
+.edit-pad {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 30px;
+  border: 2px dashed rgba(255, 255, 255, 0.35);
+  border-radius: 20px;
+  background: rgba(24, 24, 27, 0.85);
+  color: var(--studio-text);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  transform: translateY(180%);
+  transition:
+    transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background 0.2s,
+    border-color 0.2s;
+}
+
+.edit-pad svg {
+  width: 26px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.edit-pad.visible {
+  transform: translateY(0);
+}
+
+.edit-pad.hover {
+  transform: scale(1.1);
+  background: var(--studio-accent);
+  border-color: #fff;
+}
+
+@media (max-width: 760px) {
+  .stage.drawer-open {
+    --drawer-space: 0px;
+  }
+
+  .stage-grid {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 16px;
+    padding: 48px 16px 120px;
+  }
+
+  .pedestal {
+    order: -1;
+    height: 200px;
+    width: 100%;
+  }
+
+  .pedestal-ring {
+    width: 180px;
+    height: 50px;
+    margin-top: 110px;
+  }
+}

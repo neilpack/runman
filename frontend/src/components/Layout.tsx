@@ -1,16 +1,17 @@
 import { NavLink, Outlet } from 'react-router';
 
 const NAV_LINKS = [
-  { to: '/home', label: 'Home' },
+  { to: '/library', label: 'Library' },
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/about', label: 'About' },
+  { to: '/status', label: 'Status' },
 ];
 
 export function Layout() {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <NavLink to="/" className="brand">
+        <NavLink to="/library" className="brand">
           runman
         </NavLink>
         <nav className="nav">
@@ -18,7 +19,6 @@ export function Layout() {
             <NavLink
               key={link.to}
               to={link.to}
-              end={link.to === '/home'}
               className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}
             >
               {link.label}
