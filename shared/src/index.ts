@@ -1,6 +1,14 @@
 // Types shared between the frontend and backend.
 // Put API request/response shapes here so both sides stay in sync.
 
+/** Persist only after upload succeeds. Playback URLs are temporary browser state. */
+export interface StoredAudioReference {
+  source: 'upload' | 'recording';
+  objectKey: string;
+  contentType: string;
+  sizeBytes: number;
+}
+
 export interface HealthResponse {
   status: 'ok';
   service: string;
@@ -58,6 +66,8 @@ export type TapeSide = 'A' | 'B';
 
 export interface Track {
   id: string;
+  /** Original ID from the external music source, when applicable. */
+  sourceId?: string;
   title: string;
   artist: string;
   durationSec: number;
@@ -66,6 +76,8 @@ export interface Track {
   source: 'library' | 'recording';
   /** Playable URL once the song library / recordings exist. */
   audioUrl?: string;
+  artworkUrl?: string;
+  licenseUrl?: string;
 }
 
 /** The parts of a cassette's look that can differ between side A and side B. */

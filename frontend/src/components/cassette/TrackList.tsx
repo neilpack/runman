@@ -1,6 +1,6 @@
 // Side A / Side B tracklist for a cassette, plus the (stubbed) song library picker.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Cassette, TapeSide, Track } from '@runman/shared';
 import { songLibrary, type SongResult } from '@/api/songLibrary';
 import { newId } from '@/hooks/useCassettes';
@@ -21,6 +21,9 @@ export function formatTime(sec: number) {
 
 export function TrackList({ cassette, side, onSideChange, onChange }: TrackListProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const draggedIdRef = useRef<string | null>(null);
 
   const sideTracks = cassette.tracks.filter((t) => t.side === side);
   const used = sideTracks.reduce((sum, t) => sum + t.durationSec, 0);
@@ -36,6 +39,19 @@ export function TrackList({ cassette, side, onSideChange, onChange }: TrackListP
     onChange([...cassette.tracks.filter((t) => t.side !== side), ...reordered]);
   };
 
+  const drop = (targetId: string) => {
+    const sourceId = draggedIdRef.current;
+    if (!sourceId || sourceId === targetId) return;
+    const from = sideTracks.findIndex((t) => t.id === sourceId);
+    const to = sideTracks.findIndex((t) => t.id === targetId);
+    if (from < 0 || to < 0) return;
+
+    const reordered = [...sideTracks];
+    const [dragged] = reordered.splice(from, 1);
+    reordered.splice(to, 0, dragged);
+    onChange([...cassette.tracks.filter((t) => t.side !== side), ...reordered]);
+  };
+
   const remove = (id: string) => onChange(cassette.tracks.filter((t) => t.id !== id));
 
   const add = (song: SongResult) =>
@@ -43,10 +59,13 @@ export function TrackList({ cassette, side, onSideChange, onChange }: TrackListP
       ...cassette.tracks,
       {
         id: newId(),
+        sourceId: song.id,
         title: song.title,
         artist: song.artist,
         durationSec: song.durationSec,
         audioUrl: song.audioUrl,
+        artworkUrl: song.artworkUrl,
+        licenseUrl: song.licenseUrl,
         side,
         source: 'library',
       },
@@ -85,7 +104,41 @@ export function TrackList({ cassette, side, onSideChange, onChange }: TrackListP
       ) : (
         <ol className="track-rows">
           {sideTracks.map((t, i) => (
-            <li key={t.id} className="track-row">
+            <li
+              key={t.id}
+              className={`track-row${draggedId === t.id ? ' dragging' : ''}${dropTargetId === t.id ? ' drop-target' : ''}`}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', t.id);
+                draggedIdRef.current = t.id;
+                setDraggedId(t.id);
+              }}
+              onDragEnter={(e) => {
+                e.preventDefault();
+                if (draggedIdRef.current !== t.id) setDropTargetId(t.id);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                if (draggedIdRef.current !== t.id) setDropTargetId(t.id);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                drop(t.id);
+                draggedIdRef.current = null;
+                setDraggedId(null);
+                setDropTargetId(null);
+              }}
+              onDragEnd={() => {
+                draggedIdRef.current = null;
+                setDraggedId(null);
+                setDropTargetId(null);
+              }}
+            >
+              <span className="track-drag-handle" aria-hidden="true" title="Drag to reorder">
+                ⋮⋮
+              </span>
               <span className="track-num">{i + 1}</span>
               <span className="track-meta">
                 <strong>{t.title}</strong>
@@ -126,22 +179,31 @@ function SongPicker({ side, onAdd, onClose }: { side: TapeSide; onAdd: (s: SongR
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SongResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [addedIds, setAddedIds] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
-    if (!songLibrary.available || !query.trim()) {
-      setResults([]);
-      return;
-    }
+    if (!songLibrary.available) return;
+
     const ctrl = new AbortController();
+    let active = true;
     const timer = window.setTimeout(() => {
       setLoading(true);
-      songLibrary
-        .search(query.trim(), ctrl.signal)
-        .then(setResults)
-        .catch(() => setResults([]))
-        .finally(() => setLoading(false));
-    }, 250);
+      const request = query.trim()
+        ? songLibrary.search(query.trim(), ctrl.signal)
+        : songLibrary.recommend(ctrl.signal);
+      request
+        .then((songs) => {
+          if (active) setResults(songs);
+        })
+        .catch((error: unknown) => {
+          if (active && (!(error instanceof Error) || error.name !== 'AbortError')) setResults([]);
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    }, query.trim() ? 250 : 0);
     return () => {
+      active = false;
       ctrl.abort();
       window.clearTimeout(timer);
     };
@@ -157,12 +219,12 @@ function SongPicker({ side, onAdd, onClose }: { side: TapeSide; onAdd: (s: SongR
     <div className="picker-backdrop" onClick={onClose}>
       <div className="picker" role="dialog" aria-label="Song library" onClick={(e) => e.stopPropagation()}>
         <header className="panel-head">
-          <h2>Song library · Side {side}</h2>
+          <h2>{query ? `Search results · Side ${side}` : `Recommended songs · Side ${side}`}</h2>
           <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
             ✕
           </button>
         </header>
-        <input
+      <input
           className="studio-input"
           placeholder={songLibrary.available ? 'Search songs or artists…' : 'Search (coming soon)'}
           value={query}
@@ -170,26 +232,40 @@ function SongPicker({ side, onAdd, onClose }: { side: TapeSide; onAdd: (s: SongR
           disabled={!songLibrary.available}
           autoFocus
         />
-        {!songLibrary.available ? (
+      {!songLibrary.available ? (
           <div className="tracks-empty">
             <p>The song library isn't connected yet.</p>
             <p className="studio-muted">
               Once it is, search results show up here and can be added straight to side {side}.
             </p>
           </div>
-        ) : loading ? (
+      ) : loading ? (
           <p className="studio-muted">Searching…</p>
         ) : (
           <ul className="track-rows">
             {results.map((r) => (
               <li key={r.id} className="track-row">
+                {r.artworkUrl ? (
+                  <img className="track-artwork" src={r.artworkUrl} alt="" />
+                ) : (
+                  <span className="track-artwork-placeholder" aria-hidden="true">♪</span>
+                )}
                 <span className="track-meta">
                   <strong>{r.title}</strong>
                   <small>{r.artist}</small>
                 </span>
                 <span className="track-time">{formatTime(r.durationSec)}</span>
-                <button type="button" className="studio-btn" onClick={() => onAdd(r)}>
-                  Add
+                {r.audioUrl && <audio className="track-preview" controls preload="none" src={r.audioUrl} />}
+                <button
+                  type="button"
+                  className={`studio-btn${addedIds.has(r.id) ? ' song-added' : ''}`}
+                  onClick={() => {
+                    onAdd(r);
+                    setAddedIds((ids) => new Set(ids).add(r.id));
+                  }}
+                  disabled={addedIds.has(r.id)}
+                >
+                  {addedIds.has(r.id) ? 'Song Added' : 'Add'}
                 </button>
               </li>
             ))}

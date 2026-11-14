@@ -436,10 +436,40 @@
   background: #0f0f11;
 }
 
+.track-row[draggable='true'] {
+  cursor: grab;
+}
+
+.track-row[draggable='true']:active {
+  cursor: grabbing;
+}
+
+.track-row.dragging {
+  opacity: 0.45;
+}
+
+.track-row.drop-target {
+  outline: 2px solid var(--studio-accent);
+  outline-offset: 2px;
+}
+
 .track-num {
   width: 20px;
   font-family: 'Space Mono', ui-monospace, monospace;
   color: var(--studio-muted);
+}
+
+.track-drag-handle {
+  flex: 0 0 14px;
+  color: var(--studio-muted);
+  cursor: grab;
+  font-size: 0.9rem;
+  letter-spacing: -0.2em;
+  user-select: none;
+}
+
+.track-row.dragging .track-drag-handle {
+  cursor: grabbing;
 }
 
 .track-meta {
@@ -458,6 +488,35 @@
 
 .track-meta small {
   color: var(--studio-muted);
+}
+
+.track-artwork,
+.track-artwork-placeholder {
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.track-artwork-placeholder {
+  display: grid;
+  place-items: center;
+  background: #2a2a2f;
+  color: var(--studio-accent);
+  font-size: 1.25rem;
+}
+
+.track-preview {
+  width: 150px;
+  height: 32px;
+}
+
+.studio-btn.song-added {
+  background: #166534;
+  border-color: #22c55e;
+  color: #dcfce7;
+  cursor: default;
 }
 
 .track-time {
