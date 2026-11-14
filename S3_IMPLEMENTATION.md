@@ -3,8 +3,9 @@
 ## Goal and boundary
 Allow signed-in users to upload/record audio, save complete tapes, reload, and play
 their own audio. Work on `feat/s3-integration`, which includes the cassette PR's
-code. Existing live cassette saves work for Jamendo tracks. **Checkpoints 1–3
-are complete locally and verified offline; checkpoint 4 needs approval.** The user makes all AWS
+code. **Checkpoints 1–3 are complete locally, the user has deployed the backend,
+and the user confirms upload/save/reload/play works.** Additional live checks
+remain below. The user makes all AWS
 console changes. Agents must not provision or modify AWS resources.
 
 Reuse the existing Cognito access-token middleware, Express/Lambda, LabRole,
@@ -73,8 +74,9 @@ Keep the separate audio-storage worktree untouched. Preserve the uncommitted
 
 Explore publication and `source: community` cloud persistence are separate work;
 keep those tracks locally with explicit errors until their contract is integrated.
-No AWS resources have been changed. Frontend upload/playback code is connected;
-manual deployment and live checks are still pending.
+Agents made no AWS resource changes. The user deployed the backend and runs the
+frontend locally. Frontend upload/playback code is connected; remaining live checks
+are recorded below.
 
 ## Checkpoint 1 pickup
 `shared/src/index.ts` exports `mediaPersistence.ts` and `mediaValidation.ts`.
@@ -183,10 +185,33 @@ formats. Architect review found no remaining blockers. Existing frontend bundle
 size/dynamic-import warnings remain. These results do not cover actual browser
 microphone/media behavior, S3 access, or a deployed frontend/backend.
 
-Stop and request approval before **checkpoint 4**, the manual deployment handoff.
-The user performs console changes; agents must not provision or modify resources.
-Checkpoint 5 remains live verification with user sessions, including target-browser
-recording, renewal, cancellation, verification retry and second-account denial.
+## Deployment and merge verification — 2026-11-14
+
+- The user followed the console guide, deployed the Lambda package, and attached
+  all three media POST routes to Lambda in API Gateway. The frontend runs locally.
+- Agent-run unsigned HTTP checks against the configured API passed: health 200,
+  all three media routes 401, preflight 204 with localhost origin, POST and the
+  Authorization/Content-Type headers allowed. These establish routing/auth/CORS,
+  not authenticated S3 access.
+- After those checks, the user confirms the instructed upload → add to cassette →
+  save → reload → play flow works. This is user-reported verification; the agent
+  did not receive tokens or independently inspect private S3 objects/ledger rows.
+- Additional live checks remain: target-browser microphone recording, URL renewal,
+  cancellation, verification retry, two-account private-reference denial, and
+  invalid upload/replay/version cases. The earlier offline tests cover these
+  service boundaries but do not replace deployed checks. Never request credentials
+  or bearer grants in chat.
+- Local `main` was fast-forwarded to `origin/main` at `88973c8`, then merged into
+  `feat/s3-integration` without conflicts. Upstream autosave, visibility controls
+  and custom stickers are preserved. Visibility/publication calls remain upstream
+  stubs; this private-audio work does not publish audio to Explore.
+- Post-merge validation passed: root typecheck, production build and 133 tests
+  (33 audio, 27 cassette frontend, 19 cassette schema, 16 cassette API, 26 media API,
+  12 media contracts). Existing frontend build warnings remain. The user's backend
+  env-example edit is unchanged and excluded from commits.
+
+The user performs any further console changes; agents must not provision or
+modify resources. Do not claim the remaining live checks have passed.
 
 ## Sources
 AWS [POST fields](https://docs.aws.amazon.com/AmazonS3/latest/developerguide/RESTObjectPOST.html)

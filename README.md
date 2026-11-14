@@ -35,7 +35,7 @@ Built for **iHack 2026** (BYU-Idaho CSE Department Computing Society) — Theme:
 | Music library | Jamendo API (Creative Commons music) |
 | Backend | Retained Express local examples; private APIs are separate work |
 | Database | DynamoDB originally planned; outside this authentication checkpoint |
-| File storage (recordings, uploads) | Private S3 client/backend implemented; manual deployment and live checks pending |
+| File storage (recordings, uploads) | Private S3 client/backend; user confirms upload/save/reload/play after deployment |
 | Auth | Standalone Cognito user pool + public SPA client; branded forms using Amplify Auth SDK |
 | Hosting | Static build only; Learner Lab hosting permissions not yet confirmed |
 
