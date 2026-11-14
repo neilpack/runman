@@ -1,6 +1,7 @@
 // One shared <audio> for song previews on Explore, so starting a preview stops the last one.
 
 import { useSyncExternalStore } from 'react';
+import { registerAudio, takeAudioFocus } from '@/audio/audioFocus';
 
 export type PreviewStatus = 'idle' | 'loading' | 'playing' | 'error';
 
@@ -41,6 +42,7 @@ export const previewPlayer = {
       previewPlayer.stop();
       return;
     }
+    takeAudioFocus('explore-preview'); // Pauses the Walkman if a tape is playing.
     a.src = url;
     set({ songId, status: 'loading' });
     a.play().catch((error: unknown) => {
@@ -57,6 +59,9 @@ export const previewPlayer = {
     if (state.songId !== null) set({ songId: null, status: 'idle' });
   },
 };
+
+// The Walkman pressing PLAY stops the preview.
+registerAudio('explore-preview', () => previewPlayer.stop());
 
 const subscribe = (l: () => void) => {
   listeners.add(l);

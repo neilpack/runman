@@ -17,7 +17,7 @@ import { cassetteStore, newId, useCassettes, useCassetteSync } from '@/hooks/use
 import { CassetteCloudPanel } from '@/components/cassette/CassetteCloudPanel';
 import { useSession } from '@/hooks/useSession';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { useTapeDeck } from '@/hooks/useTapeDeck';
+import { deckProgress, useDeck } from '@/components/deck/DeckProvider';
 import { playSfx } from '@/audio/sfx';
 import { AudioInput, type UploadedAudioMetadata } from '@/components/AudioInput';
 import { SIDE_CAPACITY_SEC } from '@/components/cassette/constants';
@@ -100,8 +100,8 @@ function LibraryStudio() {
 
   const [drawerOpen, setDrawerOpen] = useState(() => window.innerWidth > 760);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [loadedId, setLoadedId] = useState<string | null>(null);
-  const [side, setSide] = useState<TapeSide>('A');
+  // The deck is app-wide (DeckProvider in Layout): its tape keeps playing on other pages.
+  const { loaded, loadedId, setLoadedId, side, setSide, deck, control } = useDeck();
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [rot, setRot] = useState(REST_ROTATION);
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
@@ -123,8 +123,6 @@ function LibraryStudio() {
   const tiltTimer = useRef<number | undefined>(undefined);
 
   const active = cassettes.find((c) => c.id === activeId);
-  const loaded = cassettes.find((c) => c.id === loadedId);
-  const deck = useTapeDeck(loaded, side);
 
   const toStage = useCallback((cx: number, cy: number) => {
     const r = stageRef.current!.getBoundingClientRect();
@@ -210,11 +208,13 @@ function LibraryStudio() {
     if (requested && (!initiallyPlaced.current || placedFocus.current !== focusId)) {
       initiallyPlaced.current = true;
       placedFocus.current = focusId;
-      placeOnStage(requested.id);
+      // Don't pull the tape out of the deck (and stop the music) to show it on the stage.
+      if (requested.id !== loadedId) placeOnStage(requested.id);
       return;
     }
-    const first = cassettes[0];
+    const first = cassettes.find((tape) => tape.id !== loadedId);
     if (!initiallyPlaced.current && first) { initiallyPlaced.current = true; placeOnStage(first.id); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadedId only matters on arrival.
   }, [placeOnStage, cassettes, focusId]);
 
   // Window-level pointer tracking. The listeners are attached once and always delegate to the
@@ -324,8 +324,7 @@ function LibraryStudio() {
   // If the active/loaded cassette was deleted elsewhere, drop the reference.
   useEffect(() => {
     if (activeId && !active) setActiveId(null);
-    if (loadedId && !loaded) setLoadedId(null);
-  }, [activeId, active, loadedId, loaded]);
+  }, [activeId, active]);
 
   const onCassettePointerDown = (e: React.PointerEvent) => {
     if (!activeId) return;
@@ -352,22 +351,17 @@ function LibraryStudio() {
     setRot((r) => ({ x: 0, y: Math.round((r.y + 180) / 180) * 180 }));
   };
 
-  const onControl = (control: DeckControl) => {
-    if (control === 'eject') {
-      deck.press('eject');
-      if (!loadedId) return;
-      const id = loadedId;
-      setLoadedId(null);
-      if (!activeId) placeOnStage(id);
-      return;
-    }
-    if (control === 'record') {
-      deck.press('stop');
+  const onControl = (key: DeckControl) => {
+    // REC opens the recorder on this tape (the tape stops so the mic doesn't pick it up).
+    if (key === 'record') {
+      control('stop');
       setRecordingOpen(true);
       return;
     }
-    deck.press(control);
-    if (control === 'flip') setSide((s) => (s === 'A' ? 'B' : 'A'));
+    const ejected = key === 'eject' ? loadedId : null;
+    control(key);
+    // An ejected tape lands back on the stage if the stage is free.
+    if (ejected && !activeId) placeOnStage(ejected);
   };
 
   const addRecordedTrack = (reference: StoredAudioReference, metadata: UploadedAudioMetadata) => {
@@ -430,14 +424,7 @@ function LibraryStudio() {
             latched={deck.latched}
             spinning={deck.spinning}
             display={deck.display}
-            progress={{
-              position: deck.position,
-              duration: deck.duration,
-              label: deck.trackCount ? `TRK ${deck.trackNumber}/${deck.trackCount}` : 'NO SONGS',
-              onSeek: deck.seek,
-              onSkip: deck.skip,
-              canSkipNext: deck.trackNumber < deck.trackCount,
-            }}
+            progress={deckProgress(deck)}
           />
           {recordingOpen && loaded && (
             <div className="record-dialog-backdrop" role="presentation" onClick={() => setRecordingOpen(false)}>
