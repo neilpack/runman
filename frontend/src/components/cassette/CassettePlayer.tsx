@@ -1,8 +1,12 @@
 // The RunMan portable player (Walkman-style): transport keys on the top edge, a tape door you
-// drop cassettes into, an A/B side lamp, LCD, eject slider, and wired orange headphones.
+// drop cassettes into, an A/B side lamp, LCD and eject button.
 //
-// This component is presentational. It does NOT play audio. Whoever implements playback should
-// own the state and pass it in: handle `onControl`, then drive `spinning`, `latched`, `display`.
+// Keys behave like a real Walkman: PLAY, REW, FF and REC lock down when pressed and can't be
+// pressed again until STOP (or another transport key, or EJECT) pops them back up. PAUSE toggles
+// down/up on its own. FLIP is a plain push button and never locks.
+//
+// This component does NOT play audio. By default it keeps the key state itself; a playback
+// implementation can take over by passing `latched` (and `spinning`) and handling `onControl`.
 // `side` + the FLIP key already work: the page flips the side and the tape animates over.
 
 import { useEffect, useState } from 'react';
@@ -41,12 +45,37 @@ const TOP_KEYS: KeyDef[] = [
   },
 ];
 
+/** Keys that lock down when pressed (REC also takes PLAY down with it, like a real deck). */
+const LATCHING: DeckControl[] = ['play', 'rewind', 'fastForward', 'record'];
+
+/** Which keys are down after `pressed` is pressed. Exported so playback code can reuse the rules. */
+export function nextLatched(current: DeckControl[], pressed: DeckControl): DeckControl[] {
+  switch (pressed) {
+    case 'stop':
+    case 'eject':
+      return [];
+    case 'pause':
+      return current.includes('pause') ? current.filter((k) => k !== 'pause') : [...current, 'pause'];
+    case 'flip':
+      return current;
+    case 'record':
+      return ['record', 'play'];
+    default:
+      return [pressed];
+  }
+}
+
+/** A key that's locked down can't be pressed again (PAUSE toggles, FLIP never locks). */
+function isLocked(down: DeckControl[], key: DeckControl): boolean {
+  return LATCHING.includes(key) && down.includes(key);
+}
+
 export interface CassettePlayerProps {
   loaded?: Cassette;
   side?: TapeSide;
-  /** Reels spin while true (set by the playback implementation). */
+  /** Reels spin while true. Defaults to spinning while PLAY / REW / FF is down (and not paused). */
   spinning?: boolean;
-  /** Keys that should look held down, e.g. ['play'] while playing. */
+  /** Keys held down. Leave undefined to let the player manage this itself (see nextLatched). */
   latched?: DeckControl[];
   /** LCD text. Defaults to EJECTED / IDLE or the loaded tape name + side. */
   display?: string;
@@ -59,8 +88,8 @@ export interface CassettePlayerProps {
 export function CassettePlayer({
   loaded,
   side = 'A',
-  spinning = false,
-  latched = [],
+  spinning,
+  latched,
   display,
   onControl,
   dropHover = false,
@@ -68,47 +97,68 @@ export function CassettePlayer({
 }: CassettePlayerProps) {
   const text = display ?? (loaded ? `${loaded.name} · SIDE ${side}` : 'EJECTED / IDLE');
   const [muted, setMuted] = useState(isSfxMuted);
+  const [ownLatched, setOwnLatched] = useState<DeckControl[]>([]);
+  const down = latched ?? ownLatched;
+  const reelsTurning =
+    spinning ?? (!down.includes('pause') && down.some((k) => k === 'play' || k === 'rewind' || k === 'fastForward'));
 
   useEffect(() => preloadSfx(), []);
+
+  // A different tape (or no tape) means every key pops back up.
+  useEffect(() => setOwnLatched([]), [loaded?.id]);
 
   const toggleMute = () => {
     setSfxMuted(!muted);
     setMuted(!muted);
   };
 
+  const press = (key: DeckControl) => {
+    if (!loaded || isLocked(down, key)) return;
+    const next = nextLatched(down, key);
+    const poppedUp = down.some((k) => !next.includes(k));
+    if (latched === undefined) setOwnLatched(next);
+    if (key === 'flip') playSfx('flip');
+    else if (key === 'eject') playSfx('eject');
+    // Keys springing back up get their own little clack.
+    if (poppedUp) window.setTimeout(() => playSfx('keyRelease'), 70);
+    onControl?.(key);
+  };
+
   return (
     <div className="walkman-wrap">
-      <Headphones />
-
       <div className="walkman">
         <div className="wm-keys">
-          {TOP_KEYS.map((k) => (
-            <button
-              key={k.id}
-              type="button"
-              className={`wm-key wm-key-${k.id}${latched.includes(k.id) ? ' latched' : ''}`}
-              onClick={() => {
-                if (k.id === 'flip') playSfx('flip');
-                onControl?.(k.id);
-              }}
-              onPointerDown={() => loaded && playSfx('keyPress')}
-              onPointerUp={() => loaded && playSfx('keyRelease')}
-              disabled={!loaded}
-              aria-label={k.label}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                style={k.id === 'flip' ? { transform: `rotate(${side === 'B' ? 180 : 0}deg)` } : undefined}
+          {TOP_KEYS.map((k) => {
+            const isDown = down.includes(k.id);
+            const locked = isLocked(down, k.id);
+            return (
+              <button
+                key={k.id}
+                type="button"
+                className={`wm-key wm-key-${k.id}${isDown ? ' latched' : ''}`}
+                onClick={() => press(k.id)}
+                onPointerDown={() => loaded && !locked && playSfx('keyPress')}
+                // Momentary keys spring straight back up; latching ones stay down.
+                onPointerUp={() => loaded && !locked && !LATCHING.includes(k.id) && k.id !== 'pause' && playSfx('keyRelease')}
+                disabled={!loaded}
+                aria-disabled={locked || undefined}
+                aria-pressed={k.id === 'flip' ? undefined : isDown}
+                aria-label={k.label}
+                title={locked ? `${k.label} is down · press STOP to release` : k.label}
               >
-                {k.icon}
-              </svg>
-              <span>{k.label}</span>
-            </button>
-          ))}
+                <svg
+                  viewBox="0 0 24 24"
+                  style={k.id === 'flip' ? { transform: `rotate(${side === 'B' ? 180 : 0}deg)` } : undefined}
+                >
+                  {k.icon}
+                </svg>
+                <span>{k.label}</span>
+              </button>
+            );
+          })}
         </div>
 
         <div className="wm-body">
-          <span className="wm-jack" aria-hidden="true" />
           <span className="wm-wheel" aria-hidden="true" />
 
           <div className="wm-head">
@@ -139,7 +189,7 @@ export function CassettePlayer({
           <div ref={slotRef} className={`wm-door${loaded ? '' : ' empty'}${dropHover ? ' drop-hover' : ''}`}>
             {loaded && (
               <div className="wm-tape" key={loaded.id}>
-                <FlippableFace cassette={loaded} width="88cqw" side={side} spinning={spinning} />
+                <FlippableFace cassette={loaded} width="88cqw" side={side} spinning={reelsTurning} />
               </div>
             )}
           </div>
@@ -148,10 +198,7 @@ export function CassettePlayer({
             <button
               type="button"
               className="wm-eject"
-              onClick={() => {
-                playSfx('eject');
-                onControl?.('eject');
-              }}
+              onClick={() => press('eject')}
               disabled={!loaded}
               aria-label="Eject"
             >
@@ -165,52 +212,5 @@ export function CassettePlayer({
         </div>
       </div>
     </div>
-  );
-}
-
-/** Orange foam-pad headphones, wired into the player's jack. Purely decorative. */
-function Headphones() {
-  return (
-    <svg className="wm-phones" viewBox="0 0 220 300" aria-hidden="true">
-      <defs>
-        <linearGradient id="wm-band" x1="0" x2="1">
-          <stop offset="0" stopColor="#6b7280" />
-          <stop offset="0.5" stopColor="#f3f4f6" />
-          <stop offset="1" stopColor="#6b7280" />
-        </linearGradient>
-        <radialGradient id="wm-foam" cx="0.4" cy="0.35" r="0.75">
-          <stop offset="0" stopColor="#ffb057" />
-          <stop offset="0.6" stopColor="#ff7a1a" />
-          <stop offset="1" stopColor="#c44d00" />
-        </radialGradient>
-        <pattern id="wm-foam-dots" width="5" height="5" patternUnits="userSpaceOnUse">
-          <circle cx="2.5" cy="2.5" r="0.9" fill="rgba(120,40,0,0.35)" />
-        </pattern>
-      </defs>
-
-      {/* cord: from the jack on the player's right side up into the left ear cup */}
-      <path
-        className="wm-cord"
-        d="M4 128 C 40 132, 30 250, 80 240 S 100 190, 96 168"
-        fill="none"
-        stroke="#1d1d22"
-        strokeWidth="3.2"
-        strokeLinecap="round"
-      />
-
-      <g transform="rotate(-10 140 110)">
-        <path d="M96 140 C 88 30, 196 30, 188 140" fill="none" stroke="url(#wm-band)" strokeWidth="7" strokeLinecap="round" />
-        <path d="M101 134 C 96 46, 184 46, 179 134" fill="none" stroke="rgba(0,0,0,0.35)" strokeWidth="1.5" />
-        <rect x="90" y="122" width="12" height="22" rx="3" fill="#9ca3af" />
-        <rect x="182" y="122" width="12" height="22" rx="3" fill="#9ca3af" />
-        {[96, 188].map((cx) => (
-          <g key={cx}>
-            <ellipse cx={cx} cy="168" rx="25" ry="30" fill="url(#wm-foam)" />
-            <ellipse cx={cx} cy="168" rx="25" ry="30" fill="url(#wm-foam-dots)" />
-            <ellipse cx={cx - 7} cy="156" rx="8" ry="6" fill="rgba(255,255,255,0.28)" />
-          </g>
-        ))}
-      </g>
-    </svg>
   );
 }

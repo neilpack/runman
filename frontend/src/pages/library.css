@@ -220,3 +220,41 @@
     margin-top: 110px;
   }
 }
+
+/* ---- Welcome-page backdrop (BACKDROP = 'welcome' in LibraryPage.tsx) ---- */
+.studio.library.library-welcome {
+  background: linear-gradient(to right, var(--brand-dark-background), var(--brand-dark-background-light));
+}
+
+/* Same faint twinkling starfield as the welcome page, behind everything on the stage */
+.library-stars {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle, #fff 0 1px, transparent 1.5px),
+    radial-gradient(circle, #ff2e88 0 1px, transparent 1.5px),
+    radial-gradient(circle, #13e0c4 0 1px, transparent 1.5px);
+  background-size: 140px 120px, 210px 170px, 260px 230px;
+  background-position: 0 0, 60px 40px, 120px 90px;
+  opacity: 0.35;
+  animation: library-stars 3s ease-in-out infinite alternate;
+}
+
+@keyframes library-stars {
+  to {
+    opacity: 0.7;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .library-stars {
+    animation: none;
+  }
+}
+
+.library-welcome .stage-grid {
+  position: relative;
+  z-index: 1;
+}

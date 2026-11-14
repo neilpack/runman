@@ -35,6 +35,12 @@ interface DragState {
 }
 
 const REST_ROTATION = { x: -14, y: 22 };
+
+/**
+ * Library backdrop. 'welcome' uses the welcome page's dark gradient and twinkling starfield;
+ * 'studio' is the original plain dark studio. Flip this to compare.
+ */
+const BACKDROP: 'welcome' | 'studio' = 'welcome';
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 const CONTROL_LABEL: Record<DeckControl, string> = {
@@ -330,13 +336,15 @@ export function LibraryPage() {
   const held = dragMode === 'move';
 
   return (
-    <div className="studio library">
+    <div className={`studio library${BACKDROP === 'welcome' ? ' library-welcome' : ''}`}>
       <div
         ref={stageRef}
         className={`stage${dragMode === 'rotate' ? ' rotating' : ''}${drawerOpen ? ' drawer-open' : ''}`}
         onPointerDown={onStagePointerDown}
         onContextMenu={(e) => e.preventDefault()}
       >
+        {BACKDROP === 'welcome' && <div className="library-stars" aria-hidden="true" />}
+
         <p className="stage-hint">
           {active
             ? 'Drag to move · drag empty space to spin · double-click to flip · drop it in the deck to load'
