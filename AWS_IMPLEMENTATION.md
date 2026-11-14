@@ -27,6 +27,16 @@ Check a task only after its completion check passes. Claim it below before editi
 - [ ] **7. Verify and document.** Run `npm run typecheck` and `npm run build`; exercise two-account data/file isolation, recording permissions, oversize/unsupported files, and failed saves/uploads. Update README with actual setup, deployment, demo URL, known limitations, and cleanup. **Done:** record commands/results and deployed smoke-test evidence below.
 
 ## Agent handoff
+
+### Audio storage implementation claim
+
+- User authorized audio step 1 implementation on `feat/audio-storage`; deployment remains prohibited. This supersedes the earlier planning-only note below.
+- Audio owns `amplify/storage/`, `frontend/src/audio/`, and audio tests. Shared edits are limited to registering `storage` alongside the existing `auth` in `amplify/backend.ts` and adding an independent `StoredAudioReference` contract. Preserve concurrent auth/data resources when integrating.
+- Contract proposal for persistence: store `StoredAudioReference` on uploaded/recorded tracks; retain cassette IDs across saves. Keys use Cognito **identity pool IDs**, not user pool `sub`. No cassette schema or authentication implementation changes in this task.
+- Local verification: `npm run test:audio` (10 tests), `npm run typecheck` (including Amplify), `npm run build`, `npm run test:auth` (6 tests), `npm run test:legacy-api` (9 tests), and `git diff --check` passed. Build retains the existing Vite auth chunk warning. No AWS calls or deployment were made.
+- Audio continuation: added browser microphone recording, file preview and reusable `AudioInput` upload/adoption control. Dashboard is local-preview-only until cassette persistence exists. Unmount cancels active work and clears playback/microphone resources through the existing keyed auth session; authentication files remain unchanged.
+- Continuation checks: `npm run test:audio` now passes 19 tests; `npm run test:auth` passes 6 tests; `npm run typecheck`, `npm run build`, and `git diff --check` pass. The existing large auth chunk warning remains. Actual browser microphone/permission UI and AWS integration have not been exercised.
+- Remaining integration: mount upload control in the future cassette editor, cassette save/delete coordination and durable cleanup retries, and live browser/two-account isolation/URL expiry checks. These are not claimed complete by this implementation.
 Keep changes within the claimed task; coordinate edits to shared contracts, configuration, and lockfile. Follow `AGENTS.md` layering and contract conventions for any retained Express routes. Never put credentials in this document.
 
 Update this block when stopping so the next agent can continue:
