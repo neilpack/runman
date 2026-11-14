@@ -1,9 +1,8 @@
 // Side A / Side B tracklist for a cassette, plus the (stubbed) song library picker.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { Cassette, StoredAudioReference, TapeSide, Track, Visibility } from '@runman/shared';
-import { isOwnAudio, visibilityOf } from '@/api/publicSync';
+import type { Cassette, StoredAudioReference, TapeSide, Track } from '@runman/shared';
 import { songLibrary, type SongResult } from '@/api/songLibrary';
 import { newId } from '@/hooks/useCassettes';
 import { AudioInput, type UploadedAudioMetadata } from '@/components/AudioInput';
@@ -30,10 +29,6 @@ export function TrackList({ cassette, side, onSideChange, onChange }: TrackListP
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const draggedIdRef = useRef<string | null>(null);
-  // Which uploaded song's ⋮⋮ menu is open, and where its button is on screen.
-  const [menu, setMenu] = useState<{ trackId: string; anchor: DOMRect } | null>(null);
-  const menuTrack = menu ? cassette.tracks.find((t) => t.id === menu.trackId) : undefined;
-  const closeMenu = useCallback(() => setMenu(null), []);
 
   const sideTracks = cassette.tracks.filter((t) => t.side === side);
   const used = sideTracks.reduce((sum, t) => sum + t.durationSec, 0);
@@ -69,10 +64,6 @@ export function TrackList({ cassette, side, onSideChange, onChange }: TrackListP
   };
 
   const remove = (id: string) => onChange(cassette.tracks.filter((t) => t.id !== id));
-
-  // Saved locally now; the upload to AWS happens when the editor closes (see api/publicSync.ts).
-  const setVisibility = (id: string, visibility: Visibility) =>
-    onChange(cassette.tracks.map((t) => (t.id === id ? { ...t, visibility } : t)));
 
   const add = (song: SongResult) => {
     if (!fits(song.durationSec)) return;
@@ -188,36 +179,14 @@ export function TrackList({ cassette, side, onSideChange, onChange }: TrackListP
                 setDropTargetId(null);
               }}
             >
-              {isOwnAudio(t) ? (
-                <button
-                  type="button"
-                  className={`track-drag-handle track-menu-btn${menu?.trackId === t.id ? ' open' : ''}`}
-                  title="Song options · drag to reorder"
-                  aria-label={`Options for ${t.title}`}
-                  aria-haspopup="menu"
-                  aria-expanded={menu?.trackId === t.id}
-                  onClick={(e) => {
-                    const anchor = e.currentTarget.getBoundingClientRect();
-                    setMenu((m) => (m?.trackId === t.id ? null : { trackId: t.id, anchor }));
-                  }}
-                >
-                  ⋮⋮
-                </button>
-              ) : (
-                <span className="track-drag-handle" aria-hidden="true" title="Drag to reorder">
-                  ⋮⋮
-                </span>
-              )}
+              <span className="track-drag-handle" aria-hidden="true" title="Drag to reorder">
+                ⋮⋮
+              </span>
               <span className="track-num">{i + 1}</span>
               <span className="track-meta">
                 <strong>{t.title}</strong>
                 <small>
                   {t.artist}
-                  {isOwnAudio(t) && (
-                    <span className={`track-visibility ${visibilityOf(t)}`}>
-                      {visibilityOf(t) === 'public' ? 'Public' : 'Private'}
-                    </span>
-                  )}
                 </small>
               </span>
               <span className="track-time">{formatTime(t.durationSec)}</span>
@@ -246,18 +215,6 @@ export function TrackList({ cassette, side, onSideChange, onChange }: TrackListP
         {full ? `Side ${side} is full (30:00)` : `+ Add songs to side ${side}`}
       </button>
 
-      {menu && menuTrack && (
-        <TrackMenu
-          track={menuTrack}
-          anchor={menu.anchor}
-          onPick={(v) => {
-            setVisibility(menuTrack.id, v);
-            setMenu(null);
-          }}
-          onClose={closeMenu}
-        />
-      )}
-
       {pickerOpen && (
         <SongPicker
           cassetteId={cassette.id}
@@ -269,94 +226,6 @@ export function TrackList({ cassette, side, onSideChange, onChange }: TrackListP
         />
       )}
     </section>
-  );
-}
-
-const VISIBILITY_CHOICES: { id: Visibility; label: string; hint: string }[] = [
-  { id: 'private', label: 'Private', hint: 'Only you can play it' },
-  { id: 'public', label: 'Public', hint: 'Anyone can find it and add it to a tape' },
-];
-
-/** Little pop-up menu beside an uploaded song's ⋮⋮ button: choose private or public. */
-function TrackMenu({
-  track,
-  anchor,
-  onPick,
-  onClose,
-}: {
-  track: Track;
-  anchor: DOMRect;
-  onPick: (v: Visibility) => void;
-  onClose: () => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const current = visibilityOf(track);
-
-  useEffect(() => {
-    ref.current?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
-    const onDown = (e: PointerEvent) => {
-      // Clicking the ⋮⋮ button again is handled by its own toggle.
-      const t = e.target as HTMLElement;
-      if (!ref.current?.contains(t) && !t.closest('.track-menu-btn')) onClose();
-    };
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    // The anchor rect goes stale once anything scrolls, so just close.
-    const onScroll = (e: Event) => {
-      if (!ref.current?.contains(e.target as Node)) onClose();
-    };
-    window.addEventListener('pointerdown', onDown);
-    window.addEventListener('keydown', onKey);
-    window.addEventListener('scroll', onScroll, true);
-    window.addEventListener('resize', onClose);
-    return () => {
-      window.removeEventListener('pointerdown', onDown);
-      window.removeEventListener('keydown', onKey);
-      window.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('resize', onClose);
-    };
-  }, [onClose]);
-
-  // Fixed to the viewport beside the button. Portalled because the tracklist pane is rotated,
-  // which would otherwise trap a fixed element inside it. Flips above when near the bottom.
-  const MENU_W = 240;
-  const left = Math.max(8, Math.min(anchor.left, window.innerWidth - MENU_W - 8));
-  const openUp = anchor.bottom + 170 > window.innerHeight;
-  const style: React.CSSProperties = openUp
-    ? { left, bottom: window.innerHeight - anchor.top + 6, width: MENU_W }
-    : { left, top: anchor.bottom + 6, width: MENU_W };
-
-  return createPortal(
-    <div ref={ref} className="track-menu studio-vars" role="menu" aria-label={`${track.title} visibility`} style={style}>
-      <span className="track-menu-title">Who can hear this song?</span>
-      {VISIBILITY_CHOICES.map((c, i) => (
-        <button
-          key={c.id}
-          type="button"
-          role="menuitemradio"
-          aria-checked={current === c.id}
-          className={current === c.id ? 'on' : ''}
-          onClick={() => onPick(c.id)}
-          onKeyDown={(e) => {
-            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-              e.preventDefault();
-              const items = ref.current?.querySelectorAll<HTMLElement>('[role="menuitemradio"]') ?? [];
-              const step = e.key === 'ArrowDown' ? 1 : -1;
-              items[(i + step + items.length) % items.length]?.focus();
-            }
-          }}
-        >
-          <span className="track-menu-check" aria-hidden="true">
-            {current === c.id ? '✓' : ''}
-          </span>
-          <span className="track-menu-text">
-            <strong>{c.label}</strong>
-            <small>{c.hint}</small>
-          </span>
-        </button>
-      ))}
-      <span className="track-menu-foot">Public songs upload when you leave the editor.</span>
-    </div>,
-    document.body,
   );
 }
 

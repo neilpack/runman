@@ -60,6 +60,8 @@ export interface SongRecord {
   audioKey?: string;
   artworkUrl?: string;
   addCount: number;
+  /** Only plays on a public tape: left out of song lists, search, trending and listener pages. */
+  unlisted?: boolean;
   publishedAt: string;
 }
 
@@ -357,7 +359,9 @@ export function createExploreService(source: ExploreSource, now: () => Date = ()
 
   /** Profiles by user id. Uploaders without a profile file still get a page (no avatar/tape). */
   async function load() {
-    const { songs, profiles, tapes } = await source.snapshot();
+    const snapshot = await source.snapshot();
+    const { profiles, tapes } = snapshot;
+    const songs = snapshot.songs.filter((s) => !s.unlisted);
     const byUser = new Map<string, PublicProfile>(profiles.map((p) => [p.userId, p]));
     for (const song of songs) {
       if (!byUser.has(song.uploaderId)) {
@@ -560,6 +564,7 @@ export function createCatalogSource(
           id: s.id, title: s.title, artist: s.artist, durationSec: s.durationSec, uploaderId: s.ownerId, uploaderUsername: s.uploaderUsername,
           // A private media key. Only this source presigns it, through the owner-checked media service.
           audioKey: s.audio.objectKey, artworkUrl: s.artworkUrl, addCount: s.addCount, publishedAt: s.publishedAt,
+          ...(s.listed ? {} : { unlisted: true }),
         })),
       ],
       profiles: [...(options.extra?.profiles ?? []), ...profiles.map(({ updatedAt: _updatedAt, ...profile }) => profile)],

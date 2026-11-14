@@ -4,6 +4,7 @@ import { audioStorage } from '@/audio/apiAudioStorage';
 import { getMediaAccount, subscribeMediaAccount } from '@/auth/mediaContext';
 import { validateAudio, type AudioUpload, type AudioProgress } from '@/audio/audioStorage';
 import { recordAudio, type AudioRecording } from '@/audio/recordAudio';
+import { draftAudioDuration, readAudioDuration } from '@/audio/audioDuration';
 import { Button } from './Button';
 import './AudioInput.css';
 
@@ -16,6 +17,8 @@ interface AudioInputProps {
   maxDurationSec?: number;
   /** What the limit belongs to, for the error message (e.g. "Side A"). */
   limitLabel?: string;
+  autoRecord?: boolean;
+  recordingOnly?: boolean;
 }
 
 function clock(sec: number): string {
@@ -42,31 +45,7 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Audio could not be processed. Please try again.';
 }
 
-function readDuration(data: Blob): Promise<number> {
-  const url = URL.createObjectURL(data);
-  const audio = document.createElement('audio');
-  audio.preload = 'metadata';
-  return new Promise((resolve, reject) => {
-    const cleanup = () => {
-      audio.removeAttribute('src');
-      audio.load();
-      URL.revokeObjectURL(url);
-    };
-    audio.onloadedmetadata = () => {
-      const duration = audio.duration;
-      cleanup();
-      if (Number.isFinite(duration) && duration > 0) resolve(duration);
-      else reject(new Error('The audio duration could not be determined. Try recording again.'));
-    };
-    audio.onerror = () => {
-      cleanup();
-      reject(new Error('The audio duration could not be determined. Try recording again.'));
-    };
-    audio.src = url;
-  });
-}
-
-export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel = 'This tape' }: AudioInputProps) {
+export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel = 'This tape', autoRecord = false, recordingOnly = false }: AudioInputProps) {
   const id = useId();
   const [draft, setDraft] = useState<DraftAudio>();
   const [preview, setPreview] = useState<string>();
@@ -111,6 +90,13 @@ export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel 
       upload.current?.cancel();
     };
   }, []);
+
+  useEffect(() => {
+    // Defer through StrictMode's setup/cleanup replay so it never opens two mic requests.
+    let canceled = false;
+    if (autoRecord) queueMicrotask(() => { if (!canceled) void startRecording(); });
+    return () => { canceled = true; };
+  }, [autoRecord]);
 
   useEffect(() => {
     if (!draft) { setPreview(undefined); setDurationSec(0); return; }
@@ -182,12 +168,14 @@ export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel 
     setProgress(undefined);
     setStatus('uploading');
     try {
-      let duration = durationSec;
+      let duration = draftAudioDuration(draft.source, draft.durationSec, durationSec);
       if (duration <= 0) {
-        duration = await readDuration(draft.data);
+        const abort = new AbortController(); controller.current = abort;
+        duration = await readAudioDuration(draft.data, abort.signal);
         if (!current()) return;
         setDurationSec(duration);
       }
+      if (maxDurationSec !== undefined && duration > maxDurationSec) throw new Error(`${limitLabel} only has ${clock(maxDurationSec)} left. Choose a shorter clip.`);
       const previous = upload.current;
       const retry = previous?.canRetryCompletion() === true;
       const task = retry ? previous : audioStorage.upload({
@@ -218,7 +206,7 @@ export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel 
         setRetryCompletion(upload.current?.canRetryCompletion() === true);
       }
     } finally {
-      if (current()) setStatus('idle');
+      if (current()) { controller.current = undefined; setStatus('idle'); }
     }
   }
 
@@ -233,8 +221,8 @@ export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel 
 
   return (
     <div className="audio-input">
-      <p id={`${id}-help`} className="muted">Choose audio or record a clip. Maximum 25 MB. Your original audio is kept without conversion.</p>
-      <label
+      <p id={`${id}-help`} className="muted">{recordingOnly ? 'Record a microphone clip.' : 'Choose audio or record a clip.'} Maximum 25 MB. Your original audio is kept without conversion.</p>
+      {!recordingOnly && <><label
         className={`audio-file-picker${busy || uploaded ? ' disabled' : ''}`}
         htmlFor={`${id}-file`}
         aria-disabled={busy || Boolean(uploaded)}
@@ -253,7 +241,7 @@ export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel 
             catch (cause) { setError(errorMessage(cause)); }
           }
           event.currentTarget.value = '';
-        }} />
+        }} /></>}
       <div className="audio-actions">
         <Button
           type="button"
@@ -271,6 +259,7 @@ export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel 
         {status === 'requesting' && <Button type="button" variant="secondary" onClick={() => controller.current?.abort()}>Cancel microphone request</Button>}
         {status === 'recording' && <>
           <Button type="button" onClick={() => { setStatus('stopping'); recording.current?.stop(); }}>Stop recording</Button>
+          <Button type="button" variant="secondary" onClick={() => controller.current?.abort()}>Cancel recording</Button>
         </>}
       </div>
       <p role="status" aria-live="polite">
@@ -290,7 +279,7 @@ export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel 
           aria-label={`Preview ${draft.name}`}
           onLoadedMetadata={(event) => {
             const duration = event.currentTarget.duration;
-            setDurationSec(Number.isFinite(duration) ? duration : 0);
+            setDurationSec(draftAudioDuration(draft.source, draft.durationSec, duration));
           }}
           onError={() => setError('This audio could not be played. Try a different file or recording format.')}
         />
@@ -304,7 +293,7 @@ export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel 
       )}
       {canUpload && draft && <div className="audio-actions">
         {!uploaded && <Button type="button" disabled={busy || tooLong || !getMediaAccount()} onClick={() => { void uploadDraft(); }}>{retryCompletion ? 'Retry verification' : 'Upload audio'}</Button>}
-        {status === 'uploading' && <Button type="button" variant="secondary" onClick={() => upload.current?.cancel()}>Cancel upload</Button>}
+        {status === 'uploading' && <Button type="button" variant="secondary" onClick={() => { controller.current?.abort(); upload.current?.cancel(); }}>Cancel upload</Button>}
         {uploaded && <Button type="button" disabled={adopted || busy || durationSec <= 0 || tooLong} onClick={() => {
           // Keep the reference if adoption fails; retry is safe by object key.
           try {

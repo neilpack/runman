@@ -107,10 +107,9 @@ test('songs need a profile and owned audio, stream through owner-checked playbac
   assert.equal(((await call('GET', '/songs?q=renamed', undefined, null)).body as PublicSongPage).total, 0);
 });
 
-test('public tapes keep Jamendo/Explore tracks, include only published public uploads, and never leak private audio', async (t) => {
-  const { call } = await server(t);
+test('a public tape shares every track, including recordings, as Explore songs without leaking object keys', async (t) => {
+  const { call, plays } = await server(t);
   await call('PUT', '/mine/profile', profile('alice'));
-  await call('PUT', '/mine/songs', { title: 'Shared', artist: 'Alice', durationSec: 10, audio: audio(alice, 2) });
   const cassette: CassettePayload = {
     id: 'tape-1', name: 'Road Mix', shellColor: '#123456', labelColor: '#ffffff', inkColor: '#000000', shellType: 'solid', penStyle: 'marker',
     stickers: [], customStickers: [{ id: 'art', slot: 0, strokes: [{ color: '#ff0000', width: 3, points: [1, 2, 3, 4] }] }], visibility: 'public',
@@ -126,8 +125,18 @@ test('public tapes keep Jamendo/Explore tracks, include only published public up
   const published = await call('PUT', '/mine/tapes/tape-1', { cassette });
   assert.equal(published.status, 200);
   const tape = published.body.tape as PublicTapeResponse['tape'];
-  assert.deepEqual(tape.tape.tracks.map((track) => track.id), ['lib', 'com', 'pub']);
+  assert.deepEqual(tape.tape.tracks.map((track) => track.id), ['lib', 'com', 'pub', 'unpub', 'priv']);
   assert.deepEqual(tape.tape.tracks[2], { id: 'pub', source: 'community', provider: 'explore', sourceId: publicSongId(alice, audio(alice, 2).objectKey), hasAudio: true, title: 'Shared', artist: 'Alice', durationSec: 10, side: 'B' });
+  const secretId = publicSongId(alice, audio(alice, 4).objectKey);
+  assert.deepEqual(tape.tape.tracks[4], { id: 'priv', source: 'community', provider: 'explore', sourceId: secretId, hasAudio: true, title: 'Secret', artist: 'Alice', durationSec: 10, side: 'B' });
+
+  // The tape's own songs stream for anyone and are listed under Explore → Songs.
+  assert.equal((await call('GET', `/songs/${secretId}/audio`, undefined, null)).status, 302);
+  assert.equal(plays.at(-1), `${alice}:aaaaaaaa-aaaa-4aaa-8aaa-000000000004`);
+  const songs = (await call('GET', '/songs', undefined, null)).body as PublicSongPage;
+  assert.deepEqual(songs.songs.filter((x) => !x.id.startsWith('demo-')).map((x) => x.title).sort(), ['Not yet', 'Secret', 'Shared']);
+  assert.equal(((await call('GET', '/songs?q=secret', undefined, null)).body as PublicSongPage).total, 1);
+  assert.equal((await call('PUT', '/mine/tapes/tape-2', { cassette: { ...cassette, id: 'tape-2', tracks: [{ ...cassette.tracks[4], audio: { ...audio(bob, 9), source: 'recording' } }] } })).status, 422, "someone else's audio");
   assert.equal(JSON.stringify(tape).includes('private/'), false, 'no private object keys');
   assert.equal('visibility' in tape.tape, false);
   assert.equal(tape.tape.customStickers?.length, 1);
@@ -140,9 +149,29 @@ test('public tapes keep Jamendo/Explore tracks, include only published public up
   const page = (await call('GET', '/profiles/alice2', undefined, null)).body as ListenerProfileResponse;
   assert.deepEqual(page.tapes.map((x) => x.owner.username), ['alice2'], 'renames show on tapes too');
 
+  const sharedId = publicSongId(alice, audio(alice, 2).objectKey);
+
   assert.equal((await call('DELETE', '/mine/tapes/tape-1', undefined, bob)).status, 404);
   assert.equal((await call('DELETE', '/mine/tapes/tape-1')).status, 200);
   assert.equal((await call('GET', `/tapes/${tape.id}`, undefined, null)).status, 404);
+  // A private tape shares nothing: its songs come down with it.
+  assert.equal((await call('GET', `/songs/${secretId}/audio`, undefined, null)).status, 404);
+  assert.equal((await call('GET', `/songs/${sharedId}/audio`, undefined, null)).status, 404);
+  assert.equal(((await call('GET', '/songs?q=secret', undefined, null)).body as PublicSongPage).total, 0);
+});
+
+test('dropping a track from a public tape removes its song unless another public tape still uses it', async (t) => {
+  const { call } = await server(t);
+  await call('PUT', '/mine/profile', profile('alice'));
+  const base: CassettePayload = { id: 'tape-9', name: 'B-sides', shellColor: '#123456', labelColor: '#ffffff', inkColor: '#000000', shellType: 'solid', penStyle: 'marker', stickers: [], tracks: [] };
+  const own = (id: string, n: number) => ({ id, source: 'upload' as const, provider: 's3' as const, audio: audio(alice, n), title: id, artist: 'Alice', durationSec: 10, side: 'A' as const });
+  await call('PUT', '/mine/tapes/tape-9', { cassette: { ...base, tracks: [own('single', 6), own('demo', 7)] } });
+  await call('PUT', '/mine/tapes/tape-10', { cassette: { ...base, id: 'tape-10', tracks: [own('single', 6)] } });
+  const demoId = publicSongId(alice, audio(alice, 7).objectKey);
+  assert.equal((await call('GET', `/songs/${demoId}/audio`, undefined, null)).status, 302);
+  await call('PUT', '/mine/tapes/tape-9', { cassette: { ...base, tracks: [] } });
+  assert.equal((await call('GET', `/songs/${demoId}/audio`, undefined, null)).status, 404, 'unused song removed');
+  assert.equal(((await call('GET', '/songs?q=single', undefined, null)).body as PublicSongPage).total, 1, 'still on tape-10');
 });
 
 test('adds count once per listener and need a sign-in', async (t) => {
@@ -176,7 +205,7 @@ test('Dynamo catalog uses fixed-partition Queries, owner conditions and transact
 
   commands.length = 0;
   outputs.push(failed());
-  await assert.rejects(repository.putSong({ id: 'song-1', ownerId: alice, uploaderUsername: 'alice', title: 'T', artist: 'A', durationSec: 1, audio: audio(alice, 1) }, now), CatalogConflict);
+  await assert.rejects(repository.putSong({ id: 'song-1', ownerId: alice, uploaderUsername: 'alice', title: 'T', artist: 'A', durationSec: 1, audio: audio(alice, 1), listed: true }, now), CatalogConflict);
   const update = commands[0] as UpdateCommand;
   assert.ok(update instanceof UpdateCommand);
   assert.equal(update.input.ConditionExpression, 'attribute_not_exists(#pk) OR #ownerId = :ownerId');
