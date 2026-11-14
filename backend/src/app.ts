@@ -5,6 +5,7 @@ import cors from 'cors';
 import { config } from './config.js';
 import { healthRouter } from './routes/health.js';
 import { itemsRouter } from './routes/items.js';
+import { musicRouter } from './routes/music.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 
 export function createApp() {
@@ -16,6 +17,7 @@ export function createApp() {
   // Register routes here. All API routes live under /api.
   app.use('/api/health', healthRouter);
   app.use('/api/items', itemsRouter);
+  app.use('/api/music', musicRouter);
 
   app.use(notFound);
   app.use(errorHandler);

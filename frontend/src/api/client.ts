@@ -1,6 +1,11 @@
 // Typed API client. All calls to the backend go through here.
 
-import type { CreateItemRequest, HealthResponse, Item } from '@runman/shared';
+import type {
+  CreateItemRequest,
+  HealthResponse,
+  Item,
+  MusicSearchResponse,
+} from '@runman/shared';
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? '';
 
@@ -22,4 +27,10 @@ export const api = {
   createItem: (input: CreateItemRequest) =>
     request<Item>('/api/items', { method: 'POST', body: JSON.stringify(input) }),
   deleteItem: (id: string) => request<void>(`/api/items/${id}`, { method: 'DELETE' }),
+  searchMusic: (query: string, options?: { limit?: number; offset?: number }) => {
+    const params = new URLSearchParams({ q: query });
+    if (options?.limit !== undefined) params.set('limit', String(options.limit));
+    if (options?.offset !== undefined) params.set('offset', String(options.offset));
+    return request<MusicSearchResponse>(`/api/music/search?${params.toString()}`);
+  },
 };
