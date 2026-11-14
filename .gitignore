@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+.worktrees/
 
 # Build output
 dist/
@@ -8,6 +9,7 @@ build/
 cdk.out/
 .amplify/
 amplify_outputs.json
+cognito-config.json
 
 # Env / secrets — commit only the .env.example files
 .env

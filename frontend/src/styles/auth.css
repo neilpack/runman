@@ -181,6 +181,38 @@
 }
 
 /* Login / sign-up form */
+.login-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.login-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.login-fields:disabled button {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.login-help, .login-account {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.9rem;
+}
+
 .login-main {
   position: relative;
   z-index: 3;

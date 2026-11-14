@@ -1,39 +1,80 @@
-# RunMan AWS implementation handoff
+﻿# RunMan AWS authentication handoff
 
 ## Goal
-By November 14, 2026, 4 PM, deploy an HTTPS demo where a verified user can create a cassette, add Jamendo tracks or their own audio, save it, reload it, and play it. A second account must not access the first account's data or files.
+Connect the React app to Cognito email/password identity, verification and reset,
+with a private dashboard session boundary. The original product goal includes
+saved cassettes and audio playback; those features and their authorization remain
+outside this authentication chat.
 
-## Confirmed decisions
-- Amplify Hosting + Amplify Gen 2; Cognito, Amplify Data/DynamoDB, and private S3 storage. Region: `us-west-2`, subject to account availability.
-- Email/password accounts with email verification and password reset; owner-only cassette and audio access.
-- Explicit **Save cassette** button and unsaved-changes indicator.
-- Browser recording/playback/effects; direct audio storage, no server-side conversion. Browser-enforced 25 MB/file demo limit; this is not a backend security boundary.
-- GitHub `main` automatically deploys one shared demo environment. Local frontend uses that backend initially.
-- $50 allocation. Retain data after judging; document cleanup, do not automatically delete it.
-- Defer sharing, social login, anonymous cloud saves, custom domain, and per-developer/preview backends.
+## Confirmed lab architecture (supersedes the original Gen 2 plan)
+- AWS Academy Learner Lab, $50 allocation; `us-west-2` preferred, `us-east-1` also allowed.
+- Standalone Cognito user pool and public SPA app client, **no client secret**.
+- Amplify Auth SDK remains; the branded forms use shared session guards. Managed
+  Authenticator tooling stays installed but is not a second runtime login flow.
+  No Cognito identity pool or browser AWS credentials.
+- Email sign-in/self-registration, email code verification/resend, password reset,
+  default Cognito sender, and the documented 8-character/all-classes password policy.
+- No custom IAM roles. This authentication path does not use Gen 2/CDK/SAM, a
+  sandbox, custom sender Lambda, or SES setup. Retained scaffolds are reference
+  only and must not be deployed unchanged; other LabRole-based deployments need separate review.
+- Academy Console/session access and optional expiring lab credentials replace the
+  earlier SSO assumption. `LabRole` is for supported server-side services, never browser access.
+- Public IDs are manually supplied in ignored `frontend/cognito-config.json`; example
+  IDs are fake. The file is browser-bundled, accepts only region/pool/client IDs,
+  and must never contain secrets. No fallback to generated Amplify outputs.
+- Hosting permission and safe config delivery are not yet confirmed. `amplify.yml`
+  performs only static install/check/build steps; a fresh checkout builds with
+  sign-in unavailable because the real public-config file is not committed/injected.
 
-## Starting point
-Read `AGENTS.md` first. The repo now has `frontend/` (React/Vite), `backend/` (Express/Lambda with SAM), and `shared/` (contracts). The README still describes Amplify setup that is not implemented. Reinspect before editing; other agents may have progressed.
+## Current source boundaries
+Read `AGENTS.md` first. `frontend/` has once-before-render configuration, branded
+SDK login flows, shared private-session guards, sign-out, and a dashboard with local audio preview from the separate audio work.
+`backend/` retains examples: `/api/items` defaults off, requires exact development
+opt-in, and is always denied by AWS markers or the Lambda entry point. Health is
+public. `shared/` keeps API contracts. Local builds never provision AWS resources.
 
-## Ordered tasks
-Check a task only after its completion check passes. Claim it below before editing shared files.
+## Authentication checkpoints
+- [x] **1:** source foundation and local tooling; legacy Gen 2 definitions now reference only.
+- [x] **2:** SDK UI/session integration and private-render boundary tests.
+- [x] **3:** restrict legacy example API; local memory CRUD preserved behind opt-in.
+- [x] **4A:** local-only standalone Cognito adapter, public config example, static-only
+  build recipe, and lab-compatible instructions. No pool/client created by the agent.
+- [ ] **4B — user-approved, supplied pool/client configured locally:** branded SDK
+  flows and shared session are connected. The user still needs to verify actual
+  client settings and exercise real sign-up, unconfirmed-login rejection,
+  confirmation/resend, password reset, reload/token refresh, sign-out/account switching.
+- [ ] **Later approved hosting:** establish a lab-permitted static host, public-config
+  delivery, HTTPS/SPA routing, and deploy a reviewed build. Do not assume Amplify Hosting access.
 
-- [ ] **1. Reconcile infrastructure.** Add Gen 2 definitions under `amplify/`; reuse the existing frontend and shared types. Inventory existing Express routes and SAM resources; document their migration to Amplify Data/storage. Preserve existing work until replacements function, and avoid deploying duplicate SAM and Amplify stacks. **Done:** one documented deployment path and working local configuration.
-- [ ] **2. Identity.** Configure Cognito and frontend sign-up, verification, sign-in/out, and reset. **Done:** verified user signs in; signed-out cloud access is denied.
-- [ ] **3. Persistence.** Define cassette/track contracts: label, colors, stickers, ordered sides, source, duration, Jamendo ID/attribution, or S3 object key. Apply backend owner rules; wire save/list/load/update/delete. **Done:** edits survive reload and another account cannot read or modify them.
-- [ ] **4. Audio storage.** Define identity-scoped S3 permissions; add upload/recording, supported-format validation, size checks, and authorized playback. Persist object keys, not expiring URLs. Finish upload before saving references; handle failures/retries and remove unused files safely on deletion. **Done:** own audio plays after reload; cross-account file access fails.
-- [ ] **5. Demo integration.** Connect cassette editor/library/player and Jamendo search with attribution. Show save/upload errors without losing edits. **Done:** complete create -> add track/record -> save -> reload -> play flow.
-- [ ] **6. Deploy.** Connect GitHub `main`, configure monorepo build (`frontend/dist`), backend deployment, generated frontend configuration, and Jamendo client ID. Keep credentials out of Git and browser bundles. **Done:** a push deploys a usable HTTPS URL.
-- [ ] **7. Verify and document.** Run `npm run typecheck` and `npm run build`; exercise two-account data/file isolation, recording permissions, oversize/unsupported files, and failed saves/uploads. Update README with actual setup, deployment, demo URL, known limitations, and cleanup. **Done:** record commands/results and deployed smoke-test evidence below.
+## Product backlog outside this chat
+Private cassette saves, explicit Save/unsaved indicator, Jamendo attribution,
+recordings/uploads, and browser playback remain product requirements. Private
+backend/file authorization must be designed and tested by the responsible work;
+this user-pool-only integration grants no storage/API privileges. Sharing, social
+login, anonymous saves, custom domain, and server-side audio conversion remain deferred.
+Keep data after judging unless cleanup is explicitly requested.
 
 ## Agent handoff
-Keep changes within the claimed task; coordinate edits to shared contracts, configuration, and lockfile. Follow `AGENTS.md` layering and contract conventions for any retained Express routes. Never put credentials in this document.
+- **Completed:** branded Cognito login/signup/confirmation/resend/reset connected to the supplied ignored public config. Shared SDK token/user session replaces cookie checks; confirmed welcome/login sessions land at `/library`; dashboard uses the same keyed guard and sign-out state. Library/editor remain public local prototypes. Live credential/email flows remain unverified.
+- **Agent:** backend-aws; source review and local checks complete.
+- **Changed files:** frontend branded login, shared session/flow modules and hook, dashboard guard, welcome/router/bootstrap/styles, focused tests/test script, and status docs. No dependency, backend/API, audio, or resource changes.
+- **Checks:** root typecheck/build, 25 strict-typechecked auth/config/session/flow tests, and diff checks passed. Main bundle is about 537 KB with Vite's size warning; managed Authenticator duplication was removed. No cloud/login/email tests performed.
+- **Concurrent merge:** preserved remote audio commit `cbf2a6f` without changing its audio code. After integration, root typecheck/build, nine auth tests, and nineteen audio tests passed. Cloud audio remains unconnected by this user-pool-only configuration; see the imported audio notes below.
+- **Blockers:** supplied pool public signing metadata is reachable, but app-client settings,
+  default-sender email delivery, and actual credential/session flows remain unverified.
+  Local AWS CLI is absent but not required for the Console path.
+- **Next:** let the user test the branded login against the existing pool. Do not create accounts or enter user passwords/codes as the agent; no duplicate pool or AWS changes required by this code task.
+- **Audio handoff:** another chat owns branch `feat/audio-storage`, worktree
+  `.worktrees/audio-storage`; this chat must not coordinate or modify that work.
 
-Update this block when stopping so the next agent can continue:
+## Imported audio handoff (prior architecture)
+Preserved from remote commit `cbf2a6f`; these are historical audio implementation notes, not current lab deployment instructions. Local dashboard preview is preserved. The cloud adapter still requires identity-pool/storage credentials and is not connected by the current user-pool-only authentication configuration. The other chat owns adapting that integration; no audio code is changed here.
 
-- **Completed:** planning only; no AWS implementation or deployment verified.
-- **Claimed task / agent:** none.
-- **Changed files:** this plan only.
-- **Checks and results:** planning-time `npm run typecheck` could not run: `tsc` missing in all workspaces. Install dependencies before implementation checks.
-- **Blockers:** none established; AWS/GitHub access not yet verified.
-- **Next action:** task 1, inventory current code and establish the Amplify migration path.
+
+- User authorized audio step 1 implementation on `feat/audio-storage`; deployment remains prohibited. This supersedes the earlier planning-only note below.
+- Audio owns `amplify/storage/`, `frontend/src/audio/`, and audio tests. Shared edits are limited to registering `storage` alongside the existing `auth` in `amplify/backend.ts` and adding an independent `StoredAudioReference` contract. Preserve concurrent auth/data resources when integrating.
+- Contract proposal for persistence: store `StoredAudioReference` on uploaded/recorded tracks; retain cassette IDs across saves. Keys use Cognito **identity pool IDs**, not user pool `sub`. No cassette schema or authentication implementation changes in this task.
+- Local verification: `npm run test:audio` (10 tests), `npm run typecheck` (including Amplify), `npm run build`, `npm run test:auth` (6 tests), `npm run test:legacy-api` (9 tests), and `git diff --check` passed. Build retains the existing Vite auth chunk warning. No AWS calls or deployment were made.
+- Audio continuation: added browser microphone recording, file preview and reusable `AudioInput` upload/adoption control. Dashboard is local-preview-only until cassette persistence exists. Unmount cancels active work and clears playback/microphone resources through the existing keyed auth session; authentication files remain unchanged.
+- Continuation checks: `npm run test:audio` now passes 19 tests; `npm run test:auth` passes 6 tests; `npm run typecheck`, `npm run build`, and `git diff --check` pass. The existing large auth chunk warning remains. Actual browser microphone/permission UI and AWS integration have not been exercised.
+- Remaining integration: mount upload control in the future cassette editor, cassette save/delete coordination and durable cleanup retries, and live browser/two-account isolation/URL expiry checks. These are not claimed complete by this implementation.
