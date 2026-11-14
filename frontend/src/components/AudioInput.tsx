@@ -10,7 +10,12 @@ interface AudioInputProps {
   /** Render under a key equal to cassetteId when changing cassette drafts. */
   cassetteId?: string;
   /** Adopt the completed reference into the draft; cassette Save remains separate. */
-  onUploaded?: (reference: StoredAudioReference) => void;
+  onUploaded?: (reference: StoredAudioReference, metadata: UploadedAudioMetadata) => void;
+}
+
+export interface UploadedAudioMetadata {
+  name: string;
+  durationSec: number;
 }
 
 interface DraftAudio {
@@ -35,6 +40,7 @@ export function AudioInput({ cassetteId, onUploaded }: AudioInputProps) {
   const [bytes, setBytes] = useState(0);
   const [progress, setProgress] = useState<AudioProgress>();
   const [uploaded, setUploaded] = useState<StoredAudioReference>();
+  const [durationSec, setDurationSec] = useState(0);
   const [adopted, setAdopted] = useState(false);
   const [handoffAttempted, setHandoffAttempted] = useState(false);
   const active = useRef(false);
@@ -55,7 +61,7 @@ export function AudioInput({ cassetteId, onUploaded }: AudioInputProps) {
   }, []);
 
   useEffect(() => {
-    if (!draft) { setPreview(undefined); return; }
+    if (!draft) { setPreview(undefined); setDurationSec(0); return; }
     const url = URL.createObjectURL(draft.data);
     const audio = player.current;
     setPreview(url);
@@ -69,6 +75,7 @@ export function AudioInput({ cassetteId, onUploaded }: AudioInputProps) {
     validateAudio(value.data, (type) => document.createElement('audio').canPlayType(type) !== '');
     setDraft(value);
     setUploaded(undefined);
+    setDurationSec(0);
     setAdopted(false);
     setHandoffAttempted(false);
     setError(undefined);
@@ -164,16 +171,31 @@ export function AudioInput({ cassetteId, onUploaded }: AudioInputProps) {
       </p>
       {draft && <div className="audio-preview">
         <p>{draft.name} · {(draft.data.size / 1_000_000).toFixed(2)} MB</p>
-        <audio ref={player} controls src={preview} preload="metadata" aria-label={`Preview ${draft.name}`} onError={() => setError('This audio could not be played. Try a different file or recording format.')} />
+        <audio
+          ref={player}
+          controls
+          src={preview}
+          preload="metadata"
+          aria-label={`Preview ${draft.name}`}
+          onLoadedMetadata={(event) => {
+            const duration = event.currentTarget.duration;
+            setDurationSec(Number.isFinite(duration) ? duration : 0);
+          }}
+          onError={() => setError('This audio could not be played. Try a different file or recording format.')}
+        />
       </div>}
       {canUpload && draft && <div className="audio-actions">
         {!uploaded && <Button type="button" disabled={busy} onClick={() => { void uploadDraft(); }}>Upload audio</Button>}
         {status === 'uploading' && <Button type="button" variant="secondary" onClick={() => upload.current?.cancel()}>Cancel upload</Button>}
-        {uploaded && <Button type="button" disabled={adopted || busy} onClick={() => {
+        {uploaded && <Button type="button" disabled={adopted || busy || durationSec <= 0} onClick={() => {
           // A throwing callback might already have changed its parent's draft.
           // Once offered to persistence, this control must never delete the file.
           setHandoffAttempted(true);
-          try { onUploaded?.(uploaded); setAdopted(true); setError(undefined); }
+          try {
+            onUploaded?.(uploaded, { name: draft?.name ?? 'Uploaded audio', durationSec });
+            setAdopted(true);
+            setError(undefined);
+          }
           catch (cause) { setError(errorMessage(cause)); }
         }}>Add to cassette</Button>}
         {uploaded && !handoffAttempted && <Button type="button" variant="secondary" disabled={busy} onClick={() => { void discardUpload(); }}>Discard upload</Button>}

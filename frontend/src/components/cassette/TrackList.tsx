@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { Cassette, TapeSide, Track } from '@runman/shared';
+import type { Cassette, StoredAudioReference, TapeSide, Track } from '@runman/shared';
 import { songLibrary, type SongResult } from '@/api/songLibrary';
 import { newId } from '@/hooks/useCassettes';
+import { AudioInput, type UploadedAudioMetadata } from '@/components/AudioInput';
 import { SIDE_CAPACITY_SEC } from './constants';
 
 interface TrackListProps {
@@ -69,6 +70,20 @@ export function TrackList({ cassette, side, onSideChange, onChange }: TrackListP
         licenseUrl: song.licenseUrl,
         side,
         source: 'library',
+      },
+    ]);
+
+  const addUpload = (reference: StoredAudioReference, metadata: UploadedAudioMetadata) =>
+    onChange([
+      ...cassette.tracks,
+      {
+        id: newId(),
+        title: metadata.name.replace(/\.[^/.]+$/, '') || 'Uploaded audio',
+        artist: 'Your upload',
+        durationSec: metadata.durationSec,
+        audioReference: reference,
+        side,
+        source: 'upload',
       },
     ]);
 
@@ -171,24 +186,47 @@ export function TrackList({ cassette, side, onSideChange, onChange }: TrackListP
         + Add songs to side {side}
       </button>
 
-      {pickerOpen && <SongPicker side={side} onAdd={add} onClose={() => setPickerOpen(false)} />}
+      {pickerOpen && (
+        <SongPicker
+          cassetteId={cassette.id}
+          side={side}
+          onAdd={add}
+          onAddUpload={addUpload}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
     </section>
   );
 }
 
-function SongPicker({ side, onAdd, onClose }: { side: TapeSide; onAdd: (s: SongResult) => void; onClose: () => void }) {
+function SongPicker({
+  cassetteId,
+  side,
+  onAdd,
+  onAddUpload,
+  onClose,
+}: {
+  cassetteId: string;
+  side: TapeSide;
+  onAdd: (s: SongResult) => void;
+  onAddUpload: (reference: StoredAudioReference, metadata: UploadedAudioMetadata) => void;
+  onClose: () => void;
+}) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SongResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string>();
   const [addedIds, setAddedIds] = useState<Set<string>>(() => new Set());
+  const [source, setSource] = useState<'library' | 'upload'>('library');
 
   useEffect(() => {
-    if (!songLibrary.available) return;
+    if (!songLibrary.available || source !== 'library') return;
 
     const ctrl = new AbortController();
     let active = true;
     const timer = window.setTimeout(() => {
       setLoading(true);
+      setError(undefined);
       const request = query.trim()
         ? songLibrary.search(query.trim(), ctrl.signal)
         : songLibrary.recommend(ctrl.signal);
@@ -197,7 +235,10 @@ function SongPicker({ side, onAdd, onClose }: { side: TapeSide; onAdd: (s: SongR
           if (active) setResults(songs);
         })
         .catch((error: unknown) => {
-          if (active && (!(error instanceof Error) || error.name !== 'AbortError')) setResults([]);
+          if (active && (!(error instanceof Error) || error.name !== 'AbortError')) {
+            setResults([]);
+            setError(error instanceof Error ? error.message : 'The music library could not be loaded.');
+          }
         })
         .finally(() => {
           if (active) setLoading(false);
@@ -208,7 +249,7 @@ function SongPicker({ side, onAdd, onClose }: { side: TapeSide; onAdd: (s: SongR
       ctrl.abort();
       window.clearTimeout(timer);
     };
-  }, [query]);
+  }, [query, source]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -236,6 +277,30 @@ function SongPicker({ side, onAdd, onClose }: { side: TapeSide; onAdd: (s: SongR
             ✕
           </button>
         </header>
+        <div className="picker-sources" role="tablist" aria-label="Song source">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={source === 'library'}
+            className={source === 'library' ? 'on' : ''}
+            onClick={() => setSource('library')}
+          >
+            Jamendo library
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={source === 'upload'}
+            className={source === 'upload' ? 'on' : ''}
+            onClick={() => setSource('upload')}
+          >
+            Upload your audio
+          </button>
+        </div>
+        {source === 'upload' ? (
+          <AudioInput key={`${cassetteId}-${side}`} cassetteId={cassetteId} onUploaded={onAddUpload} />
+        ) : (
+          <>
       <input
           className="studio-input"
           placeholder={songLibrary.available ? 'Search songs or artists…' : 'Search (coming soon)'}
@@ -283,6 +348,9 @@ function SongPicker({ side, onAdd, onClose }: { side: TapeSide; onAdd: (s: SongR
             ))}
             {query && results.length === 0 && <p className="studio-muted">No matches.</p>}
           </ul>
+        )}
+        {error && <p className="picker-error" role="alert">{error}</p>}
+          </>
         )}
       </div>
     </div>,
