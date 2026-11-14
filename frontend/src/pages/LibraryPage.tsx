@@ -356,7 +356,7 @@ function LibraryStudio() {
 
   return (
     <div className={`studio library${BACKDROP === 'welcome' ? ' library-welcome' : ''}`}>
-      <CassetteCloudPanel onCreate={create} />
+      <CassetteCloudPanel />
       <div
         ref={stageRef}
         className={`stage${dragMode === 'rotate' ? ' rotating' : ''}${drawerOpen ? ' drawer-open' : ''}`}

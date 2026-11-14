@@ -21,6 +21,7 @@ export function CassetteSaveControls({ id }: { id: string }) {
     : tape?.cloudMissing ? 'Saved tape no longer exists · your draft was kept'
     : tape?.dirty !== false || !tape?.revision ? 'Unsaved changes · local draft'
     : 'Saved to account';
+  if (!tape?.error && !tape?.conflict && !tape?.cloudMissing && !sync.storageError) return null;
   return (
     <section className="cassette-save-notice" aria-label="Save tape">
       <div className="cassette-save-actions">
@@ -28,7 +29,7 @@ export function CassetteSaveControls({ id }: { id: string }) {
         <div className="cassette-cloud-actions">
           {authenticated ? (
             <button type="button" className="studio-btn primary" disabled={busy || Boolean(tape?.conflict || tape?.cloudMissing) || tape?.dirty === false} onClick={() => { if (currentContext()) void cassetteStore.save(id); }}>
-              {tape?.saving ? 'Saving…' : 'Save to account'}
+              {tape?.saving ? 'Saving…' : 'Retry save'}
             </button>
           ) : <Link to="/login" className="studio-btn primary">Sign in to save online</Link>}
           {authenticated && (Boolean(tape?.revision) || tape?.conflict || tape?.cloudMissing) && (

@@ -1,5 +1,5 @@
 // Edit / create a cassette: colours, label text + pen style, shell type, stickers, tracklist.
-// Edits persist as local drafts; account saves are explicit.
+// Edits persist locally immediately and sync to the account automatically.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -26,6 +26,7 @@ import {
 import { faceFor, patchSide, sideBHasOwnStyle, sideLook } from '@/components/cassette/sides';
 import { cassetteStore, newId, useCassette, useCassetteSync } from '@/hooks/useCassettes';
 import { CassetteSaveControls } from '@/components/cassette/CassetteSaveControls';
+import { createEditorSaver } from '@/cassettes/editorSaver';
 import { useOrbit } from '@/hooks/useOrbit';
 import type { LibraryLocationState } from './LibraryPage';
 import './editor.css';
@@ -112,6 +113,19 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
   const sync = useCassetteSync();
   const tapeSync = sync.tapes[cassette.id];
   const busy = Boolean(tapeSync?.saving || tapeSync?.deleting || tapeSync?.reloading);
+  const [finishing, setFinishing] = useState(false);
+  const [saver] = useState(() => createEditorSaver(cassetteStore, cassette.id, sync.context));
+  useEffect(() => {
+    if (sync.status !== 'authenticated' || !tapeSync?.dirty || tapeSync.error || tapeSync.conflict || tapeSync.cloudMissing) return;
+    const timer = window.setTimeout(() => { void saver(); }, 600);
+    return () => window.clearTimeout(timer);
+  }, [cassette, sync.status, tapeSync?.dirty, tapeSync?.error, tapeSync?.conflict, tapeSync?.cloudMissing, saver]);
+  const finish = async () => {
+    setFinishing(true);
+    const saved = await saver();
+    setFinishing(false);
+    if (saved && cassetteStore.getSync().context === sync.context) onDone();
+  };
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [side, setSide] = useState<TapeSide>('A');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -312,13 +326,13 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
         <Link to="/library" className="studio-btn">
           ← Library
         </Link>
-        <span className="studio-muted editor-saved">Edits stay in a local draft</span>
+        <span className="studio-muted editor-saved">{sync.status !== 'authenticated' ? 'Saved on this device' : tapeSync?.error || tapeSync?.conflict || tapeSync?.cloudMissing ? 'Changes need attention' : tapeSync?.saving || tapeSync?.dirty ? 'Saving...' : 'Saved'}</span>
         <div className="row">
           <button type="button" className="studio-btn danger" disabled={busy} onClick={() => setConfirmingDelete(true)}>
             Delete
           </button>
-          <button type="button" className="studio-btn primary" onClick={onDone}>
-            Done
+          <button type="button" className="studio-btn primary" disabled={finishing || Boolean(tapeSync?.deleting || tapeSync?.reloading)} onClick={() => void finish()}>
+            {finishing ? 'Saving...' : 'Done'}
           </button>
         </div>
       </div>
