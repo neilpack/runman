@@ -91,6 +91,17 @@ export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel 
     setError(undefined);
   }
 
+  function discardDraft() {
+    if (busy || uploaded) return;
+    player.current?.pause();
+    setDraft(undefined);
+    setPreview(undefined);
+    setDurationSec(0);
+    setProgress(undefined);
+    setBytes(0);
+    setError(undefined);
+  }
+
   async function startRecording() {
     if (busy) return;
     setError(undefined);
@@ -153,8 +164,18 @@ export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel 
   return (
     <div className="audio-input">
       <p id={`${id}-help`} className="muted">Choose audio or record a clip. Maximum 25 MB. Your original audio is kept without conversion.</p>
-      <label htmlFor={`${id}-file`}>Audio file</label>
-      <input id={`${id}-file`} className="input" type="file" accept="audio/*" disabled={busy || Boolean(uploaded)} aria-describedby={`${id}-help`}
+      <label
+        className={`audio-file-picker${busy || uploaded ? ' disabled' : ''}`}
+        htmlFor={`${id}-file`}
+        aria-disabled={busy || Boolean(uploaded)}
+      >
+        <span className="audio-file-icon" aria-hidden="true">↥</span>
+        <span className="audio-file-copy">
+          <strong>{draft ? 'Choose a different audio file' : 'Choose an audio file'}</strong>
+          <small>{draft ? draft.name : 'MP3, WAV, M4A, OGG, or WebM · up to 25 MB'}</small>
+        </span>
+      </label>
+      <input id={`${id}-file`} className="audio-file-input" type="file" accept="audio/*" disabled={busy || Boolean(uploaded)} aria-describedby={`${id}-help`}
         onChange={(event) => {
           const file = event.currentTarget.files?.[0];
           if (file) {
@@ -164,11 +185,22 @@ export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel 
           event.currentTarget.value = '';
         }} />
       <div className="audio-actions">
-        <Button type="button" variant="secondary" disabled={busy || Boolean(uploaded)} onClick={() => { void startRecording(); }}>Record microphone</Button>
+        <Button
+          type="button"
+          variant="secondary"
+          className="audio-record-button"
+          disabled={busy || Boolean(uploaded)}
+          onClick={() => { void startRecording(); }}
+        >
+          <svg className="audio-record-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="8" y="3" width="8" height="12" rx="4" />
+            <path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8" />
+          </svg>
+          Record microphone
+        </Button>
         {status === 'requesting' && <Button type="button" variant="secondary" onClick={() => controller.current?.abort()}>Cancel microphone request</Button>}
         {status === 'recording' && <>
           <Button type="button" onClick={() => { setStatus('stopping'); recording.current?.stop(); }}>Stop recording</Button>
-          <Button type="button" variant="secondary" onClick={() => controller.current?.abort()}>Discard recording</Button>
         </>}
       </div>
       <p role="status" aria-live="polite">
@@ -194,6 +226,13 @@ export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel 
           onError={() => setError('This audio could not be played. Try a different file or recording format.')}
         />
       </div>}
+      {draft && !uploaded && !busy && (
+        <div className="audio-actions">
+          <Button type="button" variant="secondary" className="audio-discard-button" onClick={discardDraft}>
+            Discard audio
+          </Button>
+        </div>
+      )}
       {canUpload && draft && <div className="audio-actions">
         {!uploaded && <Button type="button" disabled={busy || tooLong} onClick={() => { void uploadDraft(); }}>Upload audio</Button>}
         {status === 'uploading' && <Button type="button" variant="secondary" onClick={() => upload.current?.cancel()}>Cancel upload</Button>}

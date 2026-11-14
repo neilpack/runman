@@ -892,10 +892,94 @@
   color: #fda4af;
 }
 
+.picker .audio-file-picker {
+  min-height: 84px;
+  border-color: rgba(255, 122, 26, 0.7);
+  background: rgba(255, 122, 26, 0.08);
+  color: var(--studio-text);
+}
+
+.picker .audio-file-picker:hover {
+  background: rgba(255, 122, 26, 0.16);
+}
+
+.picker .audio-file-picker:focus-within {
+  outline-color: #ff7a1a;
+}
+
+.picker .audio-file-icon {
+  background: #ff7a1a;
+  color: #2a1000;
+}
+
+.picker .audio-file-copy small {
+  color: var(--studio-muted);
+}
+
+.picker .audio-record-button {
+  border: 1px solid rgba(255, 122, 26, 0.55);
+  background: rgba(255, 122, 26, 0.12);
+  color: #ffd7b5;
+}
+
+.picker .audio-record-button:hover:not(:disabled) {
+  background: rgba(255, 122, 26, 0.24);
+  border-color: #ff7a1a;
+}
+
+.picker .audio-discard-button {
+  border-color: rgba(244, 63, 94, 0.55);
+  color: #fda4af;
+}
+
 .picker-error {
   margin: 0;
   color: #fda4af;
   font-size: 0.85rem;
+}
+
+.picker-sources {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: #0f0f11;
+}
+
+.picker-sources button {
+  flex: 1;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--studio-muted);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.picker-sources button.on {
+  background: #fff;
+  color: #18181b;
+}
+
+.picker .audio-input {
+  color: var(--studio-text);
+  font-size: 0.9rem;
+}
+
+.picker .audio-input .input,
+.picker .audio-input input[type='file'] {
+  width: 100%;
+  color: var(--studio-text);
+}
+
+.picker .audio-input .muted {
+  color: var(--studio-muted);
+}
+
+.picker .audio-input .error {
+  color: #fda4af;
 }
 
 @media (max-width: 860px) {

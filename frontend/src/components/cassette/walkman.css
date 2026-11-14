@@ -153,28 +153,37 @@
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
-.wm-side span {
+.wm-side button {
   width: 30px;
   height: 30px;
+  padding: 0;
+  border: 0;
   display: grid;
   place-items: center;
   border-radius: 7px;
+  background: transparent;
+  font: inherit;
   font-weight: 900;
   font-size: 1rem;
   color: #52525b;
+  cursor: pointer;
   transition:
     background 0.3s,
     color 0.3s,
     box-shadow 0.3s;
 }
 
-.wm-side span.on {
+.wm-side button.on {
   background: var(--wm-orange);
   color: #2a1000;
   box-shadow: 0 0 14px rgba(255, 122, 26, 0.7);
 }
 
-.wm-side.off span.on {
+.wm-side button:disabled {
+  cursor: not-allowed;
+}
+
+.wm-side.off button.on {
   background: transparent;
   color: #52525b;
   box-shadow: none;

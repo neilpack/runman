@@ -394,6 +394,7 @@ function LibraryStudio() {
           <CassettePlayer
             loaded={loaded}
             side={side}
+            onSideChange={setSide}
             slotRef={slotRef}
             dropHover={zone === 'player'}
             onControl={onControl}
