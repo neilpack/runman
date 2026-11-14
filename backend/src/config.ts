@@ -17,6 +17,10 @@ export function readConfig(env: NodeJS.ProcessEnv) {
       itemsTable: env.ITEMS_TABLE || undefined,
       uploadsBucket: env.UPLOADS_BUCKET || undefined,
     },
+    jamendo: {
+      clientId: env.JAMENDO_CLIENT_ID || undefined,
+      apiUrl: env.JAMENDO_API_URL ?? 'https://api.jamendo.com/v3.0',
+    },
   } as const;
 }
 

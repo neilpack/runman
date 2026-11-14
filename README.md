@@ -56,7 +56,8 @@ the locked dependencies for all workspaces.
 | Existing backend AWS helpers | AWS SDK v3 DynamoDB/S3 clients, document client, and S3 presigner |
 | Music search and audio | Browser `fetch`, audio/Web Audio, and MediaRecorder APIs; no extra library required |
 
-Set `VITE_JAMENDO_CLIENT_ID` in `frontend/.env.local` (see the example file).
+Set `JAMENDO_CLIENT_ID` in `backend/.env` (see `backend/.env.example`). The backend
+proxies Jamendo searches through `GET /api/music/search?q=...`.
 Authentication needs the public pool/client IDs in ignored `frontend/cognito-config.json`;
 packages alone do not create a pool. The frontend configures Amplify before rendering.
 Never put AWS/lab credentials or client secrets in browser files.
@@ -108,10 +109,10 @@ credentials in the browser.
 
 ### 3. Environment variables
 
-Create `frontend/.env.local` (do not commit it):
+Create `backend/.env` from `backend/.env.example` (do not commit it), then set:
 
 ```
-VITE_JAMENDO_CLIENT_ID=your_client_id_here
+JAMENDO_CLIENT_ID=your_client_id_here
 ```
 
 ### 4. Standalone Cognito configuration (checkpoint 4A)
@@ -137,15 +138,16 @@ checkout lacks the ignored file and intentionally builds with sign-in unavailabl
 See [authentication setup](AUTH_DEPLOYMENT.md) for future pool/client settings and
 live checks. No AWS creation or live authentication has been verified in 4A.
 
-Home and About remain public. Dashboard uses Amplify Authenticator for email/password
+The local cassette library at `/`, editor at `/cassettes/:id/edit`, Status, and About
+remain public prototypes. Dashboard uses Amplify Authenticator for email/password
 sign-up, email confirmation/resend, password reset, and sign-in. It waits for a
 settled authenticated identity and offers sign-out; account changes reset its local
 state. Missing, malformed, or unusable configuration shows a sign-in setup message
 without mounting the sign-in flow or private content. The app still builds/runs
 without outputs and never simulates authenticated cloud access.
 
-The signed-in dashboard currently displays identity status only. Cassette saving
-and audio storage are not implemented. Test real verification/reset email delivery,
+The signed-in dashboard displays identity status and local audio preview. Private
+cloud cassette persistence and cloud audio authorization remain unconnected. Test real verification/reset email delivery,
 session reload, sign-out, and account switching after shared Cognito provisioning.
 
 The retained Express `/api/items` example has no authentication or per-user ownership
@@ -159,7 +161,7 @@ Production/unset modes and AWS execution markers deny it even with the flag enab
 the Lambda entry point always disables examples independently of environment values.
 An unsafe opt-in is ignored rather than stopping the server, so `/api/health` stays
 public and available. This retires the public example API; it does not implement
-private cassette authorization, which will use Amplify Data ownership rules.
+private cassette authorization, which requires a separately reviewed lab-compatible backend.
 
 ### 5. Run the app
 

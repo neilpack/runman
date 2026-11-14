@@ -1,0 +1,115 @@
+.cp {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 10px);
+  left: 0;
+  width: 250px;
+  padding: 14px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #2a2a2f, #1c1c20);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: cp-pop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: top left;
+}
+
+@keyframes cp-pop {
+  from {
+    transform: scale(0.85);
+    opacity: 0;
+  }
+}
+
+.cp-sv {
+  position: relative;
+  height: 140px;
+  border-radius: 12px;
+  cursor: crosshair;
+  touch-action: none;
+  background-blend-mode: normal;
+}
+
+.cp-sv::before,
+.cp-sv::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.cp-sv::before {
+  background: linear-gradient(to right, #fff, rgba(255, 255, 255, 0));
+}
+
+.cp-sv::after {
+  background: linear-gradient(to top, #000, rgba(0, 0, 0, 0));
+}
+
+.cp-hue {
+  position: relative;
+  height: 14px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f00, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00);
+  cursor: pointer;
+  touch-action: none;
+}
+
+.cp-thumb {
+  position: absolute;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.cp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cp-preview {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px #0f0f11,
+    0 0 0 3px rgba(255, 255, 255, 0.3);
+}
+
+.cp-hex {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: #0f0f11;
+  color: var(--studio-text);
+  font-family: 'Space Mono', ui-monospace, monospace;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+}
+
+.cp-hex:focus {
+  outline: 2px solid var(--studio-accent);
+}
+
+.cp-done {
+  padding: 7px 12px;
+  border: none;
+  border-radius: 10px;
+  background: var(--studio-accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+}

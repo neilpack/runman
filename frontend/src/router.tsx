@@ -5,6 +5,8 @@ import { lazy, Suspense } from 'react';
 import { Layout } from './components/Layout';
 import { HomePage } from './pages/HomePage';
 import { authSetup } from './auth/configure';
+import { LibraryPage } from './pages/LibraryPage';
+import { EditCassettePage } from './pages/EditCassettePage';
 import { AboutPage } from './pages/AboutPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
@@ -14,7 +16,9 @@ export const router = createBrowserRouter([
   {
     element: <Layout />,
     children: [
-      { path: '/', element: <HomePage /> },
+      { path: '/', element: <LibraryPage /> },
+      { path: '/cassettes/:id/edit', element: <EditCassettePage /> },
+      { path: '/status', element: <HomePage /> },
       {
         path: '/dashboard',
         element: (

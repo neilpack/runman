@@ -18,7 +18,9 @@
   --space-6: 24px;
   --space-8: 32px;
 
-  --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* App fonts (retro theme): Rubik for body/UI text, Righteous for headings and logos. */
+  --font: 'Rubik', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Righteous', 'Rubik', system-ui, sans-serif;
   color-scheme: light dark;
 }
 
@@ -267,4 +269,47 @@ a {
     flex-direction: column;
     align-items: flex-start;
   }
+}
+
+/* Cassette studio (Library + Edit pages): dark, full-width scenes. */
+.studio {
+  --studio-bg: #1c1c1f;
+  --studio-bg-2: #2a2a2e;
+  --studio-panel: #18181b;
+  --studio-panel-2: #232327;
+  --studio-text: #e4e4e7;
+  --studio-muted: #8b8b94;
+  --studio-accent: #f43f5e;
+  --studio-wood: #9a5a06;
+  --studio-wood-dark: #6e3f03;
+  color: var(--studio-text);
+  background: radial-gradient(ellipse at 30% 20%, var(--studio-bg-2), var(--studio-bg) 70%);
+}
+
+.app-main:has(> .studio) {
+  max-width: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-shell:has(.studio) .app-footer {
+  display: none;
+}
+
+/* Display font: headings, logos and the big chunky labels. Righteous has a single weight,
+   so turn off faux-bold to keep its shapes clean. */
+h1,
+h2,
+h3,
+.brand,
+.wm-logo strong,
+.cf-label-band,
+.side-switch button,
+.side-mini button,
+.side-block-head,
+.drawer-create,
+.edit-pad {
+  font-family: var(--font-display);
+  font-synthesis: none;
 }
