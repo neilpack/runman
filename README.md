@@ -144,7 +144,23 @@ A version-only check on Node 25 succeeded with process-local
 `NODE_OPTIONS=--no-experimental-webstorage`; this does not validate cloud deployment.
 `amplify/package.json` scopes ESM to the infrastructure directory without changing the existing root
 package's module behavior. Backend packages/CLI are root dev dependencies; frontend
-Amplify runtime/UI dependencies will be added with the identity UI checkpoint.
+Amplify runtime/UI packages are installed, with configuration and identity UI still pending.
+
+### Shared AWS and music tooling
+
+Run `npm install` from the repo root to install every workspace's dependencies.
+
+| Work | Package/API |
+|---|---|
+| Frontend auth, data, and stored audio | `aws-amplify` (`aws-amplify/auth`, `aws-amplify/data`, `aws-amplify/storage`) |
+| Sign-in components | `@aws-amplify/ui-react` |
+| Infrastructure | Root Amplify backend/CLI and CDK dependencies |
+| Retained Express AWS helpers | Existing AWS SDK v3 DynamoDB/S3 packages in `backend/` |
+| Jamendo requests and playback/recording | Browser `fetch`, audio/Web Audio, and MediaRecorder APIs; no extra package required |
+
+Set `VITE_JAMENDO_CLIENT_ID` in `frontend/.env.local`. AWS operations will also need
+the shared backend's generated outputs and Amplify configuration; installing packages
+does not provision or connect cloud resources. Never include AWS credentials in browser code.
 
 ---
 
