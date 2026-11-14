@@ -1,0 +1,274 @@
+/* Account + Explore pages. Uses theme tokens from styles/global.css. */
+
+.account-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.account-header-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.account-header-text h1 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.account-header-text p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.account-banner {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--brand-accent) 45%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--brand-accent) 10%, transparent);
+}
+
+.account-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.account-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.account-intro {
+  margin-top: calc(-1 * var(--space-2));
+}
+
+.account-storage {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+/* Forms */
+.account-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.account-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-weight: 500;
+}
+
+.account-handle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.account-handle > span {
+  color: var(--color-muted);
+  font-weight: 600;
+}
+
+.account-hint {
+  margin: calc(-1 * var(--space-1)) 0 0;
+  font-size: 0.85rem;
+}
+
+.account-note {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.account-note:empty {
+  display: none;
+}
+
+.account-note-ok {
+  color: var(--color-ok);
+}
+
+.account-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.9rem;
+}
+
+.account-rules {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-1) var(--space-3);
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+.account-rules li.met {
+  color: var(--color-ok);
+}
+
+.account input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+/* Profile picture */
+.account-avatar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.account-avatar-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.account-avatar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.account-crop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.account-slider {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  font-size: 0.9rem;
+}
+
+.account-slider input {
+  width: 100%;
+  accent-color: var(--brand-accent);
+}
+
+/* Favorite tape picker */
+.account-fav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.account-tapes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: var(--space-3);
+}
+
+.account-tape {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.account-tape:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+
+.account-tape.selected {
+  border-color: var(--brand-accent);
+}
+
+.account-tape:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.account-tape:disabled {
+  cursor: progress;
+}
+
+.account-tape-face {
+  container-type: inline-size;
+  display: block;
+  pointer-events: none;
+}
+
+.account-tape-name {
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account-tape-badge {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  padding: 0 var(--space-2);
+  border-radius: 999px;
+  background: var(--brand-accent);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+/* Explore */
+.explore-you {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.explore-you .card-title {
+  margin: 0;
+}
+
+.explore-you p {
+  margin: 0;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .account-tape {
+    transition: none;
+  }
+
+  .account-tape:hover:not(:disabled) {
+    transform: none;
+  }
+}

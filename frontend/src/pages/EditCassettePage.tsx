@@ -188,6 +188,7 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
     const d = trayDrag.current;
     if (!d || d.pointerId !== e.pointerId) return;
     if (!d.dragging && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < 6) return;
+    if (!d.dragging) document.documentElement.classList.add('dragging-sticker');
     d.dragging = true;
     setGhost({ kind: d.kind, x: e.clientX, y: e.clientY, over: overFace(e.clientX, e.clientY) });
   };
@@ -196,6 +197,7 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
     const d = trayDrag.current;
     if (!d || d.pointerId !== e.pointerId) return;
     trayDrag.current = null;
+    document.documentElement.classList.remove('dragging-sticker');
     if (!d.dragging) return; // a plain click: onClick adds it
     setGhost(null);
     // The browser may still fire a click for this press; ignore that one.
@@ -203,6 +205,9 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
     window.setTimeout(() => (suppressTrayClick.current = false), 0);
     if (drop && overFace(e.clientX, e.clientY)) addSticker(d.kind, facePercent(e.clientX, e.clientY));
   };
+
+  // Never leave the page stuck on the grabbing cursor if the editor unmounts mid-drag.
+  useEffect(() => () => document.documentElement.classList.remove('dragging-sticker'), []);
 
   const ghostSize = ghost?.over && faceRef.current ? faceRef.current.getBoundingClientRect().width * 0.14 : 56;
 
