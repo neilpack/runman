@@ -1,5 +1,8 @@
 // Types shared between the frontend and backend.
 // Put API request/response shapes here so both sides stay in sync.
+export * from './cassettePersistence.js';
+export * from './cassetteValidation.js';
+export * from './cassetteAdapters.js';
 
 /** Persist only after upload succeeds. Playback URLs are temporary browser state. */
 export interface StoredAudioReference {

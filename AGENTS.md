@@ -29,9 +29,13 @@ Run from the repo root.
 | `npm run dev`          | Backend on :4000 + frontend on :5173 together          |
 | `npm run typecheck`    | `tsc` across all workspaces. **Run before finishing a task.** |
 | `npm run build`        | Lambda bundle (`backend/dist/`) + frontend (`frontend/dist/`) |
+| `npm run package:backend` | Build and verify an offline Lambda ZIP + SHA-256 manifest in ignored `backend/dist/` |
+| `npm run test:deployment` | Offline ZIP allowlist, integrity and manifest tests |
 | `npm run sticker -- <name>` | Add a Reicon icon to the cassette sticker tray (`--filled`, `--search <term>`) |
 | `npm run typecheck:amplify` | Check Amplify definitions without deploying AWS resources |
 | `npm run test:legacy-api` | Typecheck and test local-example/API exposure boundaries |
+| `npm run test:cassettes` | Typecheck and test cassette persistence contracts/adapters |
+| `npm run test:cassette-api` | Offline JWT, owner-isolation, cursor and repository API tests |
 
 ## AWS deployment boundary
 

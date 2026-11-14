@@ -1,5 +1,5 @@
 // Edit / create a cassette: colours, label text + pen style, shell type, stickers, tracklist.
-// Every change is saved immediately to the cassette store.
+// Edits persist as local drafts; account saves are explicit.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -24,7 +24,8 @@ import {
   stickerLabel,
 } from '@/components/cassette/constants';
 import { faceFor, patchSide, sideBHasOwnStyle, sideLook } from '@/components/cassette/sides';
-import { cassetteStore, newId, useCassette } from '@/hooks/useCassettes';
+import { cassetteStore, newId, useCassette, useCassetteSync } from '@/hooks/useCassettes';
+import { CassetteSaveControls } from '@/components/cassette/CassetteSaveControls';
 import { useOrbit } from '@/hooks/useOrbit';
 import type { LibraryLocationState } from './LibraryPage';
 import './editor.css';
@@ -32,14 +33,24 @@ import './editor.css';
 export function EditCassettePage() {
   const { id } = useParams();
   const cassette = useCassette(id);
+  const sync = useCassetteSync();
   const navigate = useNavigate();
+  const [requested, setRequested] = useState<string | null>(null);
+  const requestKey = `${sync.context}:${id}`;
+  useEffect(() => {
+    if (id && sync.status === 'authenticated') { setRequested(requestKey); void cassetteStore.ensureLoaded(id); }
+  }, [id, sync.status, sync.context, requestKey]);
+
+  if (sync.status === 'hidden') return <div className="studio editor"><p role="status">Checking your account…</p></div>;
 
   if (!cassette) {
+    const loading = sync.loading || Boolean(id && sync.tapes[id]?.reloading) || (sync.status === 'authenticated' && requested !== requestKey);
     return (
       <div className="studio editor">
         <div className="editor-missing">
-          <h1>Tape not found</h1>
-          <p className="studio-muted">It may have been deleted.</p>
+          <h1>{loading ? 'Loading tape…' : 'Tape not found'}</h1>
+          <p className="studio-muted" role="status">{loading ? 'Checking your saved library.' : id && sync.tapes[id]?.error ? sync.tapes[id].error : sync.listError ?? 'It may have been deleted or belong to another account.'}</p>
+          {sync.status === 'authenticated' && id && <button type="button" className="studio-btn" disabled={loading} onClick={() => void cassetteStore.reload(id)}>Retry loading</button>}
           <Link to="/library" className="studio-btn primary">
             Back to library
           </Link>
@@ -50,8 +61,8 @@ export function EditCassettePage() {
 
   // The library puts this tape on the pedestal when it opens (if it still exists).
   const backToLibrary = () => navigate('/library', { state: { focusId: cassette.id } satisfies LibraryLocationState });
-  // Keyed so each tape gets its own editor (and its own on-exit public sync).
-  return <Editor key={cassette.id} cassette={cassette} onDone={backToLibrary} />;
+  // Keyed per account context and tape so each tape gets its own editor (and its own on-exit public sync).
+  return <Editor key={`${sync.context}:${cassette.id}`} cassette={cassette} onDone={backToLibrary} />;
 }
 
 function Swatches({
@@ -98,6 +109,9 @@ function Swatches({
 }
 
 function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }) {
+  const sync = useCassetteSync();
+  const tapeSync = sync.tapes[cassette.id];
+  const busy = Boolean(tapeSync?.saving || tapeSync?.deleting || tapeSync?.reloading);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [side, setSide] = useState<TapeSide>('A');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -114,7 +128,8 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
     setRotation({ x: -10, y: side === 'B' ? 205 : 25 });
   }, [side, setRotation]);
 
-  const update = (patch: Partial<Cassette>) => cassetteStore.update(cassette.id, patch);
+  const currentContext = () => cassetteStore.getSync().context === sync.context;
+  const update = (patch: Partial<Cassette>) => { if (currentContext()) cassetteStore.update(cassette.id, patch); };
 
   // ---- Public sharing: pushed to AWS once, when the editor closes ----
   // However the listener leaves (Done, ← Library, the nav bar, browser back), the editor unmounts
@@ -137,10 +152,12 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
 
   // Label colour, ink, pen style and stickers belong to the side currently shown.
   const look = sideLook(cassette, side);
-  const updateLook = (patch: Partial<SideLook>) =>
-    cassetteStore.update(cassette.id, (c) => patchSide(c, side, patch));
-  const updateStickers = (fn: (stickers: Sticker[]) => Sticker[]) =>
-    cassetteStore.update(cassette.id, (c) => patchSide(c, side, { stickers: fn(sideLook(c, side).stickers) }));
+  const updateLook = (patch: Partial<SideLook>) => {
+    if (currentContext()) cassetteStore.update(cassette.id, (c) => patchSide(c, side, patch));
+  };
+  const updateStickers = (fn: (stickers: Sticker[]) => Sticker[]) => {
+    if (currentContext()) cassetteStore.update(cassette.id, (c) => patchSide(c, side, { stickers: fn(sideLook(c, side).stickers) }));
+  };
   const updateSticker = (sid: string, patch: Partial<Sticker>) =>
     updateStickers((list) => list.map((s) => (s.id === sid ? { ...s, ...patch } : s)));
   const removeSticker = (sid: string) => {
@@ -270,14 +287,23 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
     return () => window.removeEventListener('keydown', onKey);
   }, [selectedId]);
 
-  const deleteCassette = () => {
-    // Leave the page first so it never flashes "Tape not found".
+  const deleteCassette = async () => {
+    const context = sync.context;
+    if (cassetteStore.getSync().context !== context) return;
+    setConfirmingDelete(false);
     const id = cassette.id;
+    // Set before removing: a successful remove unmounts the editor, and its on-exit
+    // public sync must not re-publish the tape we're deleting.
     deleted.current = true;
+    const removed = await cassetteStore.remove(id);
+    if (!removed) {
+      // Delete failed (e.g. cloud error) — the editor stays open, so keep the on-exit sync.
+      deleted.current = false;
+      return;
+    }
     // Only what was public when the editor opened has reached AWS; take that down.
     void removePublicContent(id, openedWith.current);
-    onDone();
-    cassetteStore.remove(id);
+    if (cassetteStore.getSync().context === context) onDone();
   };
 
   return (
@@ -286,9 +312,9 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
         <Link to="/library" className="studio-btn">
           ← Library
         </Link>
-        <span className="studio-muted editor-saved">Changes save automatically</span>
+        <span className="studio-muted editor-saved">Edits stay in a local draft</span>
         <div className="row">
-          <button type="button" className="studio-btn danger" onClick={() => setConfirmingDelete(true)}>
+          <button type="button" className="studio-btn danger" disabled={busy} onClick={() => setConfirmingDelete(true)}>
             Delete
           </button>
           <button type="button" className="studio-btn primary" onClick={onDone}>
@@ -296,6 +322,8 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
           </button>
         </div>
       </div>
+
+      <CassetteSaveControls id={cassette.id} />
 
       <div className="editor-grid">
         {/* ---------------- Customization deck ---------------- */}
@@ -587,8 +615,8 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
         title="Toss this tape?"
         message={
           <>
-            <strong>{cassette.name || 'Untitled'}</strong> and its tracklist will be deleted from your library. This
-            can't be undone.
+            <strong>{cassette.name || 'Untitled'}</strong> and its tracklist will be deleted from {tapeSync?.revision ? 'your account and this device' : 'this device'}. This
+            can't be undone. Audio files are not deleted.
           </>
         }
         confirmLabel="Delete tape"
