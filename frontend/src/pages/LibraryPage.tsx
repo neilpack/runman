@@ -43,6 +43,7 @@ const REST_ROTATION = { x: -14, y: 22 };
 export interface LibraryLocationState {
   /** Tape to put on the pedestal, e.g. the one just edited. */
   focusId?: string;
+  cassetteSaved?: boolean;
 }
 
 /**
@@ -76,6 +77,20 @@ function LibraryStudio() {
   const cassettes = useCassettes();
   const navigate = useNavigate();
   const location = useLocation();
+  const [showSaved, setShowSaved] = useState(false);
+  useEffect(() => {
+    const state = location.state as LibraryLocationState | null;
+    if (!state?.cassetteSaved) return;
+    setShowSaved(true);
+    navigate({ pathname: location.pathname, search: location.search, hash: location.hash }, {
+      replace: true, state: { ...state, cassetteSaved: false },
+    });
+  }, [location, navigate]);
+  useEffect(() => {
+    if (!showSaved) return;
+    const timer = window.setTimeout(() => setShowSaved(false), 3200);
+    return () => window.clearTimeout(timer);
+  }, [showSaved]);
   const small = useMediaQuery('(max-width: 760px)');
   const width = small ? 170 : 230;
   const height = width * CASSETTE_ASPECT;
@@ -356,7 +371,11 @@ function LibraryStudio() {
 
   return (
     <div className={`studio library${BACKDROP === 'welcome' ? ' library-welcome' : ''}`}>
-      <CassetteCloudPanel onCreate={create} />
+      {showSaved && <div className="cassette-saved-toast" role="status" aria-live="polite">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8" /><path d="m5 10 3 3 7-7" /></svg>
+        Cassette saved
+      </div>}
+      <CassetteCloudPanel />
       <div
         ref={stageRef}
         className={`stage${dragMode === 'rotate' ? ' rotating' : ''}${drawerOpen ? ' drawer-open' : ''}`}
