@@ -18,10 +18,16 @@ export interface PublicSongItem {
   durationSec: number;
   audio: StoredAudioReference;
   artworkUrl?: string;
+  /**
+   * True when the owner shared the song itself (listed on Explore). False for a song that is only
+   * there so a public tape can play it: it streams, but is left out of song lists and search.
+   */
+  listed: boolean;
   addCount: number;
   publishedAt: string;
   updatedAt: string;
 }
+/** `listed: false` never hides an already-listed song; only unlistSong() does that. */
 export type PublicSongInput = Omit<PublicSongItem, 'addCount' | 'publishedAt' | 'updatedAt'>;
 export interface PublicProfileItem extends PublicProfile { updatedAt: string }
 export type PublicProfileInput = Omit<PublicProfile, 'userId'>;
@@ -32,11 +38,14 @@ export interface PublicCatalogRepository {
   listTapes(): Promise<PublicTape[]>;
   listProfiles(): Promise<PublicProfileItem[]>;
   getSong(id: string): Promise<PublicSongItem | undefined>;
+  getTape(id: string): Promise<PublicTape | undefined>;
   getProfile(owner: string): Promise<PublicProfileItem | undefined>;
   /** Creates or updates; keeps publishedAt and addCount. CatalogConflict if another owner has the id. */
   putSong(input: PublicSongInput, now: string): Promise<PublicSongItem>;
   /** False when there was nothing of this owner's to remove. */
   deleteSong(id: string, owner: string): Promise<boolean>;
+  /** Keeps the song streamable for public tapes but drops it from lists. False if not the owner's. */
+  unlistSong(id: string, owner: string, now: string): Promise<boolean>;
   putTape(input: PublicTapeInput, now: string): Promise<PublicTape>;
   deleteTape(id: string, owner: string): Promise<boolean>;
   /** Claims the username atomically (UsernameTaken). With `ifPublished`, returns undefined instead of creating. */
@@ -52,12 +61,12 @@ const time = (value: unknown) => typeof value === 'string' && TIME.test(value) &
 /** Rows are re-validated on every read, so a bad row can never reach a listener. */
 export function checkedSong(value: unknown): PublicSongItem {
   if (!value || typeof value !== 'object') throw new CatalogCorrupt();
-  const { id, ownerId, uploaderUsername, title, artist, durationSec, audio, artworkUrl, addCount, publishedAt, updatedAt, ...rest } = value as Record<string, unknown>;
+  const { id, ownerId, uploaderUsername, title, artist, durationSec, audio, artworkUrl, listed = true, addCount, publishedAt, updatedAt, ...rest } = value as Record<string, unknown>;
   const song = validatePublishSongRequest({ title, artist, durationSec, audio, ...(artworkUrl !== undefined ? { artworkUrl } : {}) });
   const user = validatePublishProfileRequest({ username: uploaderUsername, avatar: null, favoriteTape: null });
   if (Object.keys(rest).length || !song.ok || !user.ok || typeof id !== 'string' || !ID.test(id) || typeof ownerId !== 'string' || !ID.test(ownerId) ||
-    typeof addCount !== 'number' || !Number.isSafeInteger(addCount) || addCount < 0 || !time(publishedAt) || !time(updatedAt)) throw new CatalogCorrupt();
-  return { id, ownerId, uploaderUsername: user.value.username, ...song.value, addCount, publishedAt: publishedAt as string, updatedAt: updatedAt as string };
+    typeof listed !== 'boolean' || typeof addCount !== 'number' || !Number.isSafeInteger(addCount) || addCount < 0 || !time(publishedAt) || !time(updatedAt)) throw new CatalogCorrupt();
+  return { id, ownerId, uploaderUsername: user.value.username, ...song.value, listed, addCount, publishedAt: publishedAt as string, updatedAt: updatedAt as string };
 }
 
 export function checkedProfile(value: unknown): PublicProfileItem {
@@ -86,17 +95,24 @@ export function createMemoryPublicCatalogRepository(): PublicCatalogRepository {
     async listTapes() { return copy([...tapes.values()]); },
     async listProfiles() { return copy([...profiles.values()]); },
     async getSong(id) { return copy(songs.get(id)); },
+    async getTape(id) { return copy(tapes.get(id)); },
     async getProfile(owner) { return copy(profiles.get(owner)); },
     async putSong(input, now) {
       const previous = songs.get(input.id);
       if (previous && previous.ownerId !== input.ownerId) throw new CatalogConflict();
-      const item = checkedSong({ ...input, addCount: previous?.addCount ?? 0, publishedAt: previous?.publishedAt ?? now, updatedAt: now });
+      const item = checkedSong({ ...input, listed: input.listed || (previous?.listed ?? false), addCount: previous?.addCount ?? 0, publishedAt: previous?.publishedAt ?? now, updatedAt: now });
       songs.set(item.id, item);
       return copy(item);
     },
     async deleteSong(id, owner) {
       if (songs.get(id)?.ownerId !== owner) return false;
       return songs.delete(id);
+    },
+    async unlistSong(id, owner, now) {
+      const song = songs.get(id);
+      if (song?.ownerId !== owner) return false;
+      songs.set(id, { ...song, listed: false, updatedAt: now });
+      return true;
     },
     async putTape(input, now) {
       const previous = tapes.get(input.id);

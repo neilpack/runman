@@ -104,14 +104,17 @@ export function createDynamoPublicCatalogRepository(tableName: string, send: (co
     async listTapes() { return lenient(await query(CATALOG_PARTITIONS.tape), CATALOG_PARTITIONS.tape, tape); },
     async listProfiles() { return lenient(await query(CATALOG_PARTITIONS.profile), CATALOG_PARTITIONS.profile, profile); },
     getSong: (id) => getOne(CATALOG_PARTITIONS.song, id, song),
+    getTape: (id) => getOne(CATALOG_PARTITIONS.tape, id, tape),
     getProfile: (owner) => getOne(CATALOG_PARTITIONS.profile, owner, profile),
 
     async putSong(input, now): Promise<PublicSongItem> {
       const fields: Record<string, unknown> = { ownerId: input.ownerId, uploaderUsername: input.uploaderUsername, title: input.title, artist: input.artist, durationSec: input.durationSec, audio: input.audio, updatedAt: now, id: input.id };
-      const names: Record<string, string> = { '#pk': 'PK', '#publishedAt': 'publishedAt', '#addCount': 'addCount', '#artworkUrl': 'artworkUrl' };
-      const values: Record<string, unknown> = { ':now': now, ':zero': 0 };
+      const names: Record<string, string> = { '#pk': 'PK', '#publishedAt': 'publishedAt', '#addCount': 'addCount', '#artworkUrl': 'artworkUrl', '#listed': 'listed' };
+      const values: Record<string, unknown> = { ':now': now, ':zero': 0, ':listed': input.listed };
       const sets = Object.keys(fields).map((key) => { names[`#${key}`] = key; values[`:${key}`] = fields[key]; return `#${key} = :${key}`; });
-      sets.push('#publishedAt = if_not_exists(#publishedAt, :now)', '#addCount = if_not_exists(#addCount, :zero)');
+      sets.push('#publishedAt = if_not_exists(#publishedAt, :now)', '#addCount = if_not_exists(#addCount, :zero)',
+        // Sharing the song lists it; a tape upsert keeps whatever it was (unlisted when new).
+        input.listed ? '#listed = :listed' : '#listed = if_not_exists(#listed, :listed)');
       if (input.artworkUrl !== undefined) { sets.push('#artworkUrl = :artworkUrl'); values[':artworkUrl'] = input.artworkUrl; }
       try {
         const output = await send(new UpdateCommand({
@@ -129,6 +132,21 @@ export function createDynamoPublicCatalogRepository(tableName: string, send: (co
       }
     },
     deleteSong: (id, owner) => deleteOwned(CATALOG_PARTITIONS.song, id, ['ownerId'], owner),
+    async unlistSong(id, owner, now) {
+      try {
+        await send(new UpdateCommand({
+          TableName: tableName, Key: { PK: CATALOG_PARTITIONS.song, SK: sk(id) },
+          UpdateExpression: 'SET #listed = :false, #updatedAt = :now',
+          ConditionExpression: 'attribute_exists(#pk) AND #ownerId = :owner',
+          ExpressionAttributeNames: { '#pk': 'PK', '#listed': 'listed', '#updatedAt': 'updatedAt', '#ownerId': 'ownerId' },
+          ExpressionAttributeValues: { ':false': false, ':now': now, ':owner': owner },
+        }));
+        return true;
+      } catch (error) {
+        if (conditionFailed(error)) return false;
+        throw error;
+      }
+    },
 
     async putTape(input, now): Promise<PublicTape> {
       const previous = await getOne(CATALOG_PARTITIONS.tape, input.id, tape);

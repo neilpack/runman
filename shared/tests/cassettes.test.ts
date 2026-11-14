@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Cassette, CassetteDocument, CassettePayload, CassetteValidationResult, SaveCassetteRequest, StoredAudioReference } from '../src/index.js';
-import { CASSETTE_LIMITS, cassetteFromDocument, sanitizeCustomStickers, cassetteToSaveRequest, validateCassetteDocument, validateDeleteCassetteRequest, validateListCassettesRequest, validateSaveCassetteRequest } from '../src/index.js';
+import { CASSETTE_LIMITS, cassetteFromDocument, cassetteFromPublicTape, sanitizeCustomStickers, cassetteToSaveRequest, validateCassetteDocument, validateDeleteCassetteRequest, validateListCassettesRequest, validateSaveCassetteRequest } from '../src/index.js';
 
 const timestamp = '2026-11-14T01:00:00.000Z';
 function tape(): Cassette {
@@ -333,4 +333,23 @@ test('community (Explore) tracks persist sourceId + hasAudio and rebuild their s
   invalid(validateSaveCassetteRequest({ ...saved, cassette: { ...saved.cassette, tracks: [{ ...first, sourceId: '../x' }] } }), 'tracks[0].sourceId');
   invalid(validateSaveCassetteRequest({ ...saved, cassette: { ...saved.cassette, tracks: [{ ...first, hasAudio: 'yes' }] } }), 'tracks[0].hasAudio');
   invalid(validateSaveCassetteRequest({ ...saved, cassette: { ...saved.cassette, tracks: [{ ...first, audio: reference }] } }), 'tracks[0].audio');
+});
+
+test('a public tape copies into a library cassette with playable Explore tracks', () => {
+  const copy = cassetteFromPublicTape({
+    id: 'their-tape', name: 'Their Mix', shellColor: '#123456', labelColor: '#ffffff', inkColor: '#000000', shellType: 'clear', penStyle: 'script',
+    stickers: [], sideB: { penStyle: 'marker' },
+    tracks: [
+      { id: 'j', source: 'library', provider: 'jamendo', sourceId: '42', title: 'Jam', artist: 'Band', durationSec: 60, side: 'A' },
+      { id: 'u', source: 'community', provider: 'explore', sourceId: 'song-9', hasAudio: true, title: 'Their upload', artist: 'Them', durationSec: 30, side: 'B' },
+    ],
+  }, { communityAudioUrl: (id) => `/api/explore/songs/${id}/audio` });
+  assert.equal('id' in copy, false);
+  assert.deepEqual(copy.sideB, { penStyle: 'marker' });
+  assert.deepEqual(copy.tracks, [
+    { id: 'j', source: 'library', sourceId: '42', title: 'Jam', artist: 'Band', durationSec: 60, side: 'A' },
+    { id: 'u', source: 'community', sourceId: 'song-9', title: 'Their upload', artist: 'Them', durationSec: 30, side: 'B', audioUrl: '/api/explore/songs/song-9/audio' },
+  ]);
+  const saved = ok(cassetteToSaveRequest({ ...copy, id: 'mine', createdAt: timestamp, updatedAt: timestamp }, 0));
+  assert.deepEqual(saved.cassette.tracks.map((t) => t.provider), ['jamendo', 'explore'], 'the copy saves to the cloud');
 });
