@@ -36,7 +36,7 @@ Built for **iHack 2026** (BYU-Idaho CSE Department Computing Society) — Theme:
 | Backend | Retained Express local examples; private APIs are separate work |
 | Database | DynamoDB originally planned; outside this authentication checkpoint |
 | File storage (recordings, uploads) | Separate audio work; no implementation in this chat |
-| Auth | Standalone Cognito user pool + public SPA client; Amplify SDK/Authenticator |
+| Auth | Standalone Cognito user pool + public SPA client; branded forms using Amplify Auth SDK |
 | Hosting | Static build only; Learner Lab hosting permissions not yet confirmed |
 
 ---
@@ -123,7 +123,7 @@ with **no client secret**, no identity pool, and no custom IAM roles. Prefer
 Gen 2/backend-provisioning plan is superseded for this lab. `amplify/` and SAM
 remain reference only: do not deploy them unchanged for this auth path or start a sandbox.
 
-After checkpoint 4B pool/client creation is approved and completed, copy
+For a pool/client already created through the approved lab Console, copy
 `frontend/cognito-config.example.json` to ignored `frontend/cognito-config.json`
 and replace its fake region/pool/client IDs with the public values. This is manual
 config, not generated outputs, and there is no fallback to `amplify_outputs.json`.
@@ -136,13 +136,18 @@ Root `amplify.yml` now contains only static install/check/build steps and no AWS
 provisioning. Hosting availability and config delivery remain undecided; a fresh
 checkout lacks the ignored file and intentionally builds with sign-in unavailable.
 See [authentication setup](AUTH_DEPLOYMENT.md) for future pool/client settings and
-live checks. No AWS creation or live authentication has been verified in 4A.
+live checks. The supplied public IDs are configured locally; actual account/email
+flows and app-client settings have not been verified by the implementation agent.
 
 The local cassette library at `/`, editor at `/cassettes/:id/edit`, Status, and About
-remain public prototypes. Dashboard uses Amplify Authenticator for email/password
-sign-up, email confirmation/resend, password reset, and sign-in. It waits for a
+remain public prototypes. The branded `/login` form uses Cognito SRP through the
+Amplify SDK for sign-up, email confirmation/resend, password reset, and sign-in.
+Welcome/login redirect confirmed sessions to `/library`; dashboard and login share
+one SDK-backed session store, with no custom session cookie. It waits for a
 settled authenticated identity and offers sign-out; account changes reset its local
-state. Missing, malformed, or unusable configuration shows a sign-in setup message
+state. Passive focus/token-refresh checks preserve a still-valid mounted account;
+sign-out, failure, and account transitions remove private content. Missing,
+malformed, or unusable configuration shows a sign-in setup message
 without mounting the sign-in flow or private content. The app still builds/runs
 without outputs and never simulates authenticated cloud access.
 
@@ -253,7 +258,7 @@ Location: Science and Technology Building, BYU-Idaho
 ### AWS
 - [Cognito browser app clients](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-settings-client-apps.html)
 - [Cognito email verification/recovery delivery](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-email.html)
-- [Authenticator UI](https://ui.docs.amplify.aws/react/connected-components/authenticator)
+- [Amplify UI reference (retained tooling)](https://ui.docs.amplify.aws/react/connected-components/authenticator)
 - [AWS Budgets](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-managing-costs.html) (set an alert to protect credits)
 
 ---

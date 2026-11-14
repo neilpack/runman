@@ -9,7 +9,9 @@ outside this authentication chat.
 ## Confirmed lab architecture (supersedes the original Gen 2 plan)
 - AWS Academy Learner Lab, $50 allocation; `us-west-2` preferred, `us-east-1` also allowed.
 - Standalone Cognito user pool and public SPA app client, **no client secret**.
-- Amplify SDK and Authenticator stay; no Cognito identity pool or browser AWS credentials.
+- Amplify Auth SDK remains; the branded forms use shared session guards. Managed
+  Authenticator tooling stays installed but is not a second runtime login flow.
+  No Cognito identity pool or browser AWS credentials.
 - Email sign-in/self-registration, email code verification/resend, password reset,
   default Cognito sender, and the documented 8-character/all-classes password policy.
 - No custom IAM roles. This authentication path does not use Gen 2/CDK/SAM, a
@@ -25,8 +27,8 @@ outside this authentication chat.
   sign-in unavailable because the real public-config file is not committed/injected.
 
 ## Current source boundaries
-Read `AGENTS.md` first. `frontend/` has once-before-render configuration, lazy-loaded
-Authenticator, private-session guards, sign-out, and a dashboard with local audio preview from the separate audio work.
+Read `AGENTS.md` first. `frontend/` has once-before-render configuration, branded
+SDK login flows, shared private-session guards, sign-out, and a dashboard with local audio preview from the separate audio work.
 `backend/` retains examples: `/api/items` defaults off, requires exact development
 opt-in, and is always denied by AWS markers or the Lambda entry point. Health is
 public. `shared/` keeps API contracts. Local builds never provision AWS resources.
@@ -36,10 +38,10 @@ public. `shared/` keeps API contracts. Local builds never provision AWS resource
 - [x] **2:** SDK UI/session integration and private-render boundary tests.
 - [x] **3:** restrict legacy example API; local memory CRUD preserved behind opt-in.
 - [x] **4A:** local-only standalone Cognito adapter, public config example, static-only
-  build recipe, and lab-compatible instructions. No pool/client created.
-- [ ] **4B — requires user go-ahead:** review and create the standalone pool/public
-  client through the lab Console, verify no client secret and SRP/refresh flows,
-  fill public config, then exercise real sign-up, unconfirmed-login rejection,
+  build recipe, and lab-compatible instructions. No pool/client created by the agent.
+- [ ] **4B — user-approved, supplied pool/client configured locally:** branded SDK
+  flows and shared session are connected. The user still needs to verify actual
+  client settings and exercise real sign-up, unconfirmed-login rejection,
   confirmation/resend, password reset, reload/token refresh, sign-out/account switching.
 - [ ] **Later approved hosting:** establish a lab-permitted static host, public-config
   delivery, HTTPS/SPA routing, and deploy a reviewed build. Do not assume Amplify Hosting access.
@@ -53,20 +55,15 @@ login, anonymous saves, custom domain, and server-side audio conversion remain d
 Keep data after judging unless cleanup is explicitly requested.
 
 ## Agent handoff
-- **Completed:** checkpoint 4A source prepared locally; live identity remains unverified.
-- **Agent:** backend-aws; source and local checks complete, awaiting review/user go-ahead for 4B.
-- **Changed files:** frontend config adapter/example/tests/ignore, static `amplify.yml`,
-  lab docs/instructions, and comment-only warnings on legacy infrastructure references.
-  No dependency changes, audio work, or resource creation.
-- **Checks:** root typecheck/build, nine strict-typechecked auth tests, YAML/static-only
-  no-provisioning assertions, ignore/example checks, and `git diff --check` passed.
-  Actual SDK configuration has no identity-pool/credential/API/storage settings.
-  Existing Vite auth-chunk size warning remains; no cloud/live-flow checks performed.
+- **Completed:** branded Cognito login/signup/confirmation/resend/reset connected to the supplied ignored public config. Shared SDK token/user session replaces cookie checks; confirmed welcome/login sessions land at `/library`; dashboard uses the same keyed guard and sign-out state. Library/editor remain public local prototypes. Live credential/email flows remain unverified.
+- **Agent:** backend-aws; source review and local checks complete.
+- **Changed files:** frontend branded login, shared session/flow modules and hook, dashboard guard, welcome/router/bootstrap/styles, focused tests/test script, and status docs. No dependency, backend/API, audio, or resource changes.
+- **Checks:** root typecheck/build, 25 strict-typechecked auth/config/session/flow tests, and diff checks passed. Main bundle is about 537 KB with Vite's size warning; managed Authenticator duplication was removed. No cloud/login/email tests performed.
 - **Concurrent merge:** preserved remote audio commit `cbf2a6f` without changing its audio code. After integration, root typecheck/build, nine auth tests, and nineteen audio tests passed. Cloud audio remains unconnected by this user-pool-only configuration; see the imported audio notes below.
-- **Blockers:** 4B requires a separate creation go-ahead and actual lab Console access.
-  Pool/client settings, default-sender email delivery, and live session flows remain unverified.
+- **Blockers:** supplied pool public signing metadata is reachable, but app-client settings,
+  default-sender email delivery, and actual credential/session flows remain unverified.
   Local AWS CLI is absent but not required for the Console path.
-- **Next:** report 4A results and wait before any 4B creation/live tests.
+- **Next:** let the user test the branded login against the existing pool. Do not create accounts or enter user passwords/codes as the agent; no duplicate pool or AWS changes required by this code task.
 - **Audio handoff:** another chat owns branch `feat/audio-storage`, worktree
   `.worktrees/audio-storage`; this chat must not coordinate or modify that work.
 

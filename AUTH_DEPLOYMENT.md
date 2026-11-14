@@ -1,10 +1,12 @@
 ﻿# Learner Lab authentication: checkpoints 4A and 4B
 
 ## Current boundary
-4A prepares local integration only. Keep Amplify's SDK/Authenticator, but connect
-it directly to a standalone Cognito user pool and public browser client. No pool,
-client, role, identity pool, hosting connection, or live authentication has been
-created or verified. **4B creation and live tests require another go-ahead.**
+The standalone pool/client public IDs have been supplied in ignored local config.
+The branded login now calls the Amplify Auth SDK directly; dashboard and welcome
+use the same token/user-backed session store. No simulated session cookie is used.
+The agent has not created resources or tested credentials, emails, or app-client
+settings. Public signing metadata was reachable in a separate read-only check;
+that does not verify login. Use the existing pool; do not create duplicates.
 
 The $50 AWS Academy Learner Lab allows the confirmed Cognito user-pool/client
 operations in `us-west-2` or `us-east-1`; prefer `us-west-2`. It does not allow
@@ -22,7 +24,7 @@ Never paste them into chat, Git, `.env` browser variables, or JSON public config
 The precreated `LabRole` is for supported server-side services, not browser access.
 No installation, login, profile write, or AWS request is performed by 4A.
 
-## 4B user-pool/client settings to review before creation
+## Existing user-pool/client settings to review before live testing
 
 | Setting | Required value |
 |---|---|
@@ -36,7 +38,7 @@ No installation, login, profile write, or AWS request is performed by 4A.
 | App type | SPA/public browser client; **no client secret** |
 | Explicit auth flows | `ALLOW_USER_SRP_AUTH` and `ALLOW_REFRESH_TOKEN_AUTH`; keep refresh-token rotation disabled for this flow |
 | Client attribute permissions | Read email and email verification; write required email; no custom attributes needed |
-| Domain / OAuth login | Not required: Authenticator uses Cognito APIs directly |
+| Domain / OAuth login | Not required: the branded form uses the Amplify Auth SDK directly |
 | Identity pool / IAM roles | None for browser authentication; do not create or embed them |
 
 Confirm in the console that the actual app client has no secret: its ID alone
@@ -69,7 +71,7 @@ AWS provisioning commands. A clean hosted checkout has no ignored config and
 intentionally builds an unconfigured app. Config delivery and an allowed static
 host must be reviewed later; 4A does not establish a live Hosting deployment.
 
-## 4B live checks after creation is approved
+## Live checks for the configured pool (not performed by the agent)
 Record the pool/client public IDs, region, tested commit, and outcomes without
 passwords or tokens. Verify sign-up, rejection before email confirmation,
 confirmation/resend, password reset/new-password sign-in, reload/session refresh,

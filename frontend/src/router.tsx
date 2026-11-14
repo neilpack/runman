@@ -6,7 +6,6 @@ import { Layout } from './components/Layout';
 import { WelcomePage } from './pages/WelcomePage';
 import { LoginPage } from './pages/LoginPage';
 import { HomePage } from './pages/HomePage';
-import { authSetup } from './auth/configure';
 import { LibraryPage } from './pages/LibraryPage';
 import { EditCassettePage } from './pages/EditCassettePage';
 import { AboutPage } from './pages/AboutPage';
@@ -28,7 +27,7 @@ export const router = createBrowserRouter([
         path: '/dashboard',
         element: (
           <Suspense fallback={<p role="status">Loading sign-in…</p>}>
-            <AuthGate setup={authSetup} />
+            <AuthGate />
           </Suspense>
         ),
       },
