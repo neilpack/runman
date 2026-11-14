@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { StoredAudioReference } from '@runman/shared';
-import { audioStorage } from '@/audio/amplifyAudioStorage';
+import { audioStorage } from '@/audio/apiAudioStorage';
+import { getMediaAccount, subscribeMediaAccount } from '@/auth/mediaContext';
 import { validateAudio, type AudioUpload, type AudioProgress } from '@/audio/audioStorage';
 import { recordAudio, type AudioRecording } from '@/audio/recordAudio';
 import { Button } from './Button';
@@ -44,15 +45,16 @@ export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel 
   const id = useId();
   const [draft, setDraft] = useState<DraftAudio>();
   const [preview, setPreview] = useState<string>();
-  const [status, setStatus] = useState<'idle' | 'requesting' | 'recording' | 'stopping' | 'uploading' | 'removing'>('idle');
+  const [status, setStatus] = useState<'idle' | 'requesting' | 'recording' | 'stopping' | 'uploading'>('idle');
   const [error, setError] = useState<string>();
   const [bytes, setBytes] = useState(0);
   const [progress, setProgress] = useState<AudioProgress>();
   const [uploaded, setUploaded] = useState<StoredAudioReference>();
   const [durationSec, setDurationSec] = useState(0);
   const [adopted, setAdopted] = useState(false);
-  const [handoffAttempted, setHandoffAttempted] = useState(false);
+  const [retryCompletion, setRetryCompletion] = useState(false);
   const active = useRef(false);
+  const operation = useRef(0);
   const controller = useRef<AbortController | undefined>(undefined);
   const recording = useRef<AudioRecording | undefined>(undefined);
   const upload = useRef<AudioUpload | undefined>(undefined);
@@ -63,8 +65,23 @@ export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel 
 
   useEffect(() => {
     active.current = true;
+    const unsubscribe = subscribeMediaAccount(() => {
+      operation.current += 1;
+      controller.current?.abort();
+      upload.current?.cancel();
+      upload.current = undefined;
+      recording.current = undefined;
+      player.current?.pause();
+      player.current?.removeAttribute('src');
+      player.current?.load();
+      setDraft(undefined); setUploaded(undefined); setProgress(undefined);
+      setAdopted(false); setRetryCompletion(false);
+      setStatus('idle'); setError(undefined);
+    });
     return () => {
       active.current = false;
+      operation.current += 1;
+      unsubscribe();
       controller.current?.abort();
       upload.current?.cancel();
     };
@@ -87,12 +104,16 @@ export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel 
     setUploaded(undefined);
     setDurationSec(0);
     setAdopted(false);
-    setHandoffAttempted(false);
+    setRetryCompletion(false);
+    upload.current?.cancel();
+    upload.current = undefined;
     setError(undefined);
   }
 
   async function startRecording() {
     if (busy) return;
+    const op = ++operation.current;
+    const current = () => active.current && operation.current === op;
     setError(undefined);
     player.current?.pause();
     setBytes(0);
@@ -100,54 +121,57 @@ export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel 
     const abort = new AbortController();
     controller.current = abort;
     try {
-      const session = await recordAudio(abort.signal, (value) => { if (active.current) setBytes(value); });
+      const session = await recordAudio(abort.signal, (value) => { if (current()) setBytes(value); });
+      if (!current()) { session.cancel(); await session.result.catch(() => undefined); return; }
       recording.current = session;
-      if (active.current) setStatus('recording');
+      setStatus('recording');
       const data = await session.result;
-      if (active.current) selectDraft({ data, name: 'Microphone recording', source: 'recording' });
+      if (current()) selectDraft({ data, name: 'Microphone recording', source: 'recording' });
     } catch (cause) {
-      if (active.current) setError(errorMessage(cause));
+      if (current()) setError(errorMessage(cause));
     } finally {
-      recording.current = undefined;
-      controller.current = undefined;
-      if (active.current) setStatus('idle');
+      if (current()) {
+        recording.current = undefined;
+        controller.current = undefined;
+        setStatus('idle');
+      }
     }
   }
 
   async function uploadDraft() {
     if (!draft || !cassetteId || !onUploaded || busy || uploaded || tooLong) return;
+    const op = ++operation.current;
+    const current = () => active.current && operation.current === op;
     setError(undefined);
     setProgress(undefined);
     setStatus('uploading');
     try {
-      const task = audioStorage.upload({
+      const previous = upload.current;
+      const retry = previous?.canRetryCompletion() === true;
+      const task = retry ? previous : audioStorage.upload({
         cassetteId, data: draft.data, source: draft.source,
-        onProgress: (value) => { if (active.current) setProgress(value); },
+        onProgress: (value) => { if (current()) setProgress(value); },
       });
       upload.current = task;
-      const reference = await task.result;
-      if (active.current) setUploaded(reference);
+      const reference = await (retry ? task.retryCompletion() : task.result);
+      if (current()) { setUploaded(reference); setRetryCompletion(false); upload.current = undefined; }
     } catch (cause) {
-      if (active.current) setError(errorMessage(cause));
+      if (current()) {
+        setError(errorMessage(cause));
+        setRetryCompletion(upload.current?.canRetryCompletion() === true);
+      }
     } finally {
-      upload.current = undefined;
-      if (active.current) setStatus('idle');
+      if (current()) setStatus('idle');
     }
   }
 
-  async function discardUpload() {
-    if (!uploaded || !cassetteId || handoffAttempted || busy) return;
-    setStatus('removing');
+  function forgetUpload() {
+    if (!uploaded || !cassetteId || busy) return;
+    // Forgetting a local selection never deletes a retained S3 object/version.
+    setUploaded(undefined);
+    setDraft(undefined);
+    setRetryCompletion(false);
     setError(undefined);
-    try {
-      // This reference has never left the control, so no cassette can use it yet.
-      await audioStorage.removeUnused(cassetteId, uploaded);
-      if (active.current) setUploaded(undefined);
-    } catch (cause) {
-      if (active.current) setError(errorMessage(cause));
-    } finally {
-      if (active.current) setStatus('idle');
-    }
   }
 
   return (
@@ -176,7 +200,6 @@ export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel 
         {status === 'recording' && `Recording: ${(bytes / 1_000_000).toFixed(2)} MB`}
         {status === 'stopping' && 'Finishing recording…'}
         {status === 'uploading' && `Uploading: ${((progress?.transferredBytes ?? 0) / 1_000_000).toFixed(2)} MB`}
-        {status === 'removing' && 'Removing unused upload…'}
         {status === 'idle' && uploaded && (adopted ? 'Audio added to this draft. Save the cassette to keep it.' : 'Upload finished. Add this audio to your cassette.')}
       </p>
       {draft && <div className="audio-preview">
@@ -195,12 +218,10 @@ export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel 
         />
       </div>}
       {canUpload && draft && <div className="audio-actions">
-        {!uploaded && <Button type="button" disabled={busy || tooLong} onClick={() => { void uploadDraft(); }}>Upload audio</Button>}
+        {!uploaded && <Button type="button" disabled={busy || tooLong || !getMediaAccount()} onClick={() => { void uploadDraft(); }}>{retryCompletion ? 'Retry verification' : 'Upload audio'}</Button>}
         {status === 'uploading' && <Button type="button" variant="secondary" onClick={() => upload.current?.cancel()}>Cancel upload</Button>}
         {uploaded && <Button type="button" disabled={adopted || busy || durationSec <= 0 || tooLong} onClick={() => {
-          // A throwing callback might already have changed its parent's draft.
-          // Once offered to persistence, this control must never delete the file.
-          setHandoffAttempted(true);
+          // Keep the reference if adoption fails; retry is safe by object key.
           try {
             onUploaded?.(uploaded, { name: draft?.name ?? 'Uploaded audio', durationSec });
             setAdopted(true);
@@ -208,11 +229,13 @@ export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel 
           }
           catch (cause) { setError(errorMessage(cause)); }
         }}>Add to cassette</Button>}
-        {uploaded && !handoffAttempted && <Button type="button" variant="secondary" disabled={busy} onClick={() => { void discardUpload(); }}>Discard upload</Button>}
+        {uploaded && !adopted && <Button type="button" variant="secondary" disabled={busy} onClick={forgetUpload}>Forget this upload locally</Button>}
         {adopted && <Button type="button" variant="secondary" onClick={() => {
-          setDraft(undefined); setUploaded(undefined); setAdopted(false); setHandoffAttempted(false);
+          setDraft(undefined); setUploaded(undefined); setAdopted(false);
         }}>Choose another clip</Button>}
       </div>}
+      {canUpload && !getMediaAccount() && <p className="muted">Sign in to upload audio. Local preview is available.</p>}
+      {canUpload && <p className="muted">Uploaded files stay in private storage when you cancel, forget a clip, or delete a tape. File cleanup is not available yet.</p>}
       {canUpload && draft && tooLong && !adopted && <p className="error" role="alert">
         This clip is {clock(durationSec)}, but {limitLabel} only has {clock(maxDurationSec ?? 0)} left on the tape. Choose a shorter clip.
       </p>}

@@ -3,8 +3,8 @@
 ## Goal and boundary
 Allow signed-in users to upload/record audio, save complete tapes, reload, and play
 their own audio. Work on `feat/s3-integration`, which includes the cassette PR's
-code. Existing live cassette saves work for Jamendo tracks. **Checkpoints 1 and 2
-are complete locally; checkpoint 3 needs approval.** The user makes all AWS
+code. Existing live cassette saves work for Jamendo tracks. **Checkpoints 1–3
+are complete locally and verified offline; checkpoint 4 needs approval.** The user makes all AWS
 console changes. Agents must not provision or modify AWS resources.
 
 Reuse the existing Cognito access-token middleware, Express/Lambda, LabRole,
@@ -59,7 +59,7 @@ Keep the separate audio-storage worktree untouched. Preserve the uncommitted
    offline tests. Validate private references during cassette save; issue playback
    grants only for owned READY media. Preserve conditional cassette revisions and
    read-only/public Explore namespace boundaries. Never fetch caller-provided URLs.
-3. **Frontend:** replace the identity-pool adapter with authenticated API + direct
+3. **Complete locally — frontend:** replace the identity-pool adapter with authenticated API + direct
    upload, completion and playback. Maintain existing AudioInput/deck behavior,
    source types and durable references. Handle logout and late results safely;
    report retained uploads honestly rather than claiming physical cleanup.
@@ -73,7 +73,8 @@ Keep the separate audio-storage worktree untouched. Preserve the uncommitted
 
 Explore publication and `source: community` cloud persistence are separate work;
 keep those tracks locally with explicit errors until their contract is integrated.
-No AWS resources have been changed. Frontend upload/playback is not connected yet.
+No AWS resources have been changed. Frontend upload/playback code is connected;
+manual deployment and live checks are still pending.
 
 ## Checkpoint 1 pickup
 `shared/src/index.ts` exports `mediaPersistence.ts` and `mediaValidation.ts`.
@@ -98,7 +99,7 @@ signing and send the identical canonical value to S3. Original browser forms may
 contain spacing that is not accepted as canonical contract input.
 
 Run `npm run test:media` for the focused contract suite. The obsolete frontend
-adapter remains unchanged until checkpoint 3. Types alone do not perform uploads.
+adapter was replaced in checkpoint 3. Types alone do not perform uploads.
 
 Validation passed: 12 media contract tests, 18 cassette regression tests, root
 typecheck (including Amplify definitions), production build, and diff checks.
@@ -144,10 +145,48 @@ The generated Lambda ZIP passed its offline smoke with media configured: health
 requests. Existing frontend bundle warnings remain. Architect review found no
 remaining checkpoint blockers; live behavior is reserved for checkpoint 5.
 
-Stop and request approval before **checkpoint 3**: replace the old identity-pool
-frontend adapter with authenticated API requests, checksum/direct POST/completion,
-and renewable playback URLs while preserving account guards, cancellation, local
-preview and durable-reference behavior. Do not deploy resources during that step.
+## Checkpoint 3 pickup
+- `frontend/src/api/mediaClient.ts` implements `api.media` with fresh Cognito access
+  tokens, no-store requests, account-generation guards and strict response checks.
+  It validates scoped S3 destinations, policy metadata, expiry, pinned playback
+  URLs and returned references before the browser uses them.
+- `audio/apiAudioStorage.ts` composes the API with WebCrypto and abortable XHR
+  multipart upload from `audioTransport.ts`. No new dependencies, identity pool,
+  browser AWS provider or Amplify Storage configuration. The old
+  `amplifyAudioStorage.ts` is removed. SHA-256 covers original bytes; MIME/codec
+  metadata is canonicalized without converting audio.
+- `audio/audioStorage.ts` exposes the existing upload/playback interface. An upload
+  resolves only after server completion. Ambiguous verification failures retain
+  the media ID for `retryCompletion()` without another transfer. Expired/rejected
+  intents allow a new upload; cancellation may still leave private bytes.
+- `auth/mediaContextStore.ts` tracks account generations independently of cassette
+  state. Leaving a confirmed session, switching accounts, or same-owner relogin
+  invalidates old work; passive same-owner refresh does not.
+- `AudioInput` retains clips on failure, offers verification retry and explicit
+  adoption, cancels late callbacks and microphone work, and clears audio on account
+  changes. Track adoption is idempotent by object key. Forgetting is local only.
+- `audio/playbackController.ts` caches URLs only in memory, aborts superseded
+  requests and distinguishes replacements under the same track ID. `useTapeDeck`
+  renews on play/resume/active seek near expiry and retries one renewal after a
+  private-media error. Paused seek does not start playback. Unload/account changes
+  clear sources and pending requests. No signed capability is saved in a draft.
+- `frontend/src/audio/README.md` describes interfaces and retention. The user's
+  requested [S3 console setup steps](S3_CONSOLE_SETUP.md) are prepared. They do not
+  claim deployment or live verification. Existing backend environment edits and
+  the separate audio-storage worktree remain untouched.
+
+Validation: all 96 focused frontend tests passed (33 audio/client/recorder/playback,
+30 authentication, 9 account, 24 cassette client/store), along with root typecheck
+and production build. The actual SDK-generated offline upload grant is accepted;
+policy expiry and API expiry are compared as instants despite different timestamp
+formats. Architect review found no remaining blockers. Existing frontend bundle
+size/dynamic-import warnings remain. These results do not cover actual browser
+microphone/media behavior, S3 access, or a deployed frontend/backend.
+
+Stop and request approval before **checkpoint 4**, the manual deployment handoff.
+The user performs console changes; agents must not provision or modify resources.
+Checkpoint 5 remains live verification with user sessions, including target-browser
+recording, renewal, cancellation, verification retry and second-account denial.
 
 ## Sources
 AWS [POST fields](https://docs.aws.amazon.com/AmazonS3/latest/developerguide/RESTObjectPOST.html)
