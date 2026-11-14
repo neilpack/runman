@@ -96,6 +96,10 @@ export interface SongProgress {
   /** Small caption on the left, e.g. "TRK 2/5". */
   label?: string;
   onSeek: (seconds: number) => void;
+  /** Previous (-1) / next (1) song buttons at either end of the bar. Omit to hide them. */
+  onSkip?: (direction: 1 | -1) => void;
+  /** False on the side's last song, which greys out the next-song button. */
+  canSkipNext?: boolean;
 }
 
 function formatTime(seconds: number): string {
@@ -103,7 +107,26 @@ function formatTime(seconds: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-function TimeSlider({ position, duration, label, onSeek, disabled }: SongProgress & { disabled: boolean }) {
+function SkipButton({ direction, onSkip, disabled }: { direction: 1 | -1; onSkip: (d: 1 | -1) => void; disabled: boolean }) {
+  const label = direction > 0 ? 'Next song' : 'Previous song';
+  return (
+    <button
+      type="button"
+      className="wm-skip"
+      onPointerDown={() => !disabled && playSfx('keyPress')}
+      onClick={() => onSkip(direction)}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        {direction > 0 ? <path d="M5 5.5l10 6.5-10 6.5zM18 5.5v13" /> : <path d="M19 5.5L9 12l10 6.5zM6 5.5v13" />}
+      </svg>
+    </button>
+  );
+}
+
+function TimeSlider({ position, duration, label, onSeek, onSkip, canSkipNext = true, disabled }: SongProgress & { disabled: boolean }) {
   // While the thumb is held, show where the finger is rather than where the audio has got to.
   const [dragValue, setDragValue] = useState<number | null>(null);
   const value = Math.min(dragValue ?? position, duration);
@@ -112,6 +135,7 @@ function TimeSlider({ position, duration, label, onSeek, disabled }: SongProgres
 
   return (
     <div className={`wm-progress${off ? ' off' : ''}`}>
+      {onSkip && <SkipButton direction={-1} onSkip={onSkip} disabled={off} />}
       <span className="wm-progress-label">{label}</span>
       <span className="wm-time">{formatTime(value)}</span>
       <input
@@ -135,6 +159,7 @@ function TimeSlider({ position, duration, label, onSeek, disabled }: SongProgres
         aria-valuetext={`${formatTime(value)} of ${formatTime(duration)}`}
       />
       <span className="wm-time">{formatTime(duration)}</span>
+      {onSkip && <SkipButton direction={1} onSkip={onSkip} disabled={off || !canSkipNext} />}
     </div>
   );
 }
