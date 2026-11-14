@@ -770,6 +770,50 @@
   font-size: 0.85rem;
 }
 
+.picker-sources {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: #0f0f11;
+}
+
+.picker-sources button {
+  flex: 1;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--studio-muted);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.picker-sources button.on {
+  background: #fff;
+  color: #18181b;
+}
+
+.picker .audio-input {
+  color: var(--studio-text);
+  font-size: 0.9rem;
+}
+
+.picker .audio-input .input,
+.picker .audio-input input[type='file'] {
+  width: 100%;
+  color: var(--studio-text);
+}
+
+.picker .audio-input .muted {
+  color: var(--studio-muted);
+}
+
+.picker .audio-input .error {
+  color: #fda4af;
+}
+
 @media (max-width: 860px) {
   .editor {
     padding: 16px;
