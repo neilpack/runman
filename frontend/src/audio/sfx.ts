@@ -1,13 +1,17 @@
-// UI sound effects for the Walkman (key clicks, eject, insert, flip).
+// UI sound effects for the Walkman (key clicks, eject, insert, flip, FF / REW tape winding).
 //
 // ─── ADDING YOUR OWN SOUNDS ──────────────────────────────────────────────────────────
 //  Drop audio files into  frontend/public/sfx/  using the file names in SFX_FILES below
 //  (mp3, wav or ogg all work; change the extension here if yours differ). That's it: any
 //  file that's present is used, and any that's missing falls back to a synthesized sound.
-//  Keep clips short (< 0.5 s) and trimmed so there's no silence at the start.
+//  Keep clips short (< 0.5 s) and trimmed so there's no silence at the start. The two winding
+//  sounds are the exception: they loop for as long as FF / REW is held, so make them seamless loops.
 // ──────────────────────────────────────────────────────────────────────────────────────
 
-export type SfxName = 'keyPress' | 'keyRelease' | 'eject' | 'insert' | 'flip';
+export type SfxName = 'keyPress' | 'keyRelease' | 'eject' | 'insert' | 'flip' | 'fastForward' | 'rewind';
+
+/** The looping sounds played while the tape winds (see startWinding). */
+export type WindSound = Extract<SfxName, 'fastForward' | 'rewind'>;
 
 export const SFX_FILES: Record<SfxName, string> = {
   keyPress: '/sfx/key-press.mp3', // a transport key going down
@@ -15,6 +19,8 @@ export const SFX_FILES: Record<SfxName, string> = {
   eject: '/sfx/eject.mp3', // tape door popping open
   insert: '/sfx/insert.mp3', // tape clunking into the door
   flip: '/sfx/flip.mp3', // tape being turned over
+  fastForward: '/sfx/fast-forward.mp3', // looped while FF winds the tape
+  rewind: '/sfx/rewind.mp3', // looped while REW winds the tape
 };
 
 /** Per-sound volume, 0-1. */
@@ -24,6 +30,8 @@ const VOLUME: Record<SfxName, number> = {
   eject: 0.8,
   insert: 0.9,
   flip: 0.6,
+  fastForward: 0.5,
+  rewind: 0.5,
 };
 
 const MUTE_KEY = 'runman.sfx.muted';
@@ -48,6 +56,7 @@ export function isSfxMuted() {
 
 export function setSfxMuted(value: boolean) {
   muted = value;
+  if (value) activeWinds.forEach((stop) => stop());
   try {
     localStorage.setItem(MUTE_KEY, value ? '1' : '0');
   } catch {
@@ -110,6 +119,106 @@ export function playSfx(name: SfxName) {
   } else {
     synth(c, name, gain);
   }
+}
+
+// ---------------------------------------------------------------------------
+// FF / REW winding loop
+// ---------------------------------------------------------------------------
+
+const activeWinds = new Set<() => void>();
+
+/**
+ * Start the whirr of the tape winding. Returns a function that fades it out; call it when the
+ * key pops up. Uses public/sfx/fast-forward.mp3 / rewind.mp3 when present, else a synth.
+ */
+export function startWinding(name: WindSound): () => void {
+  if (muted) return () => {};
+  const c = audio();
+  if (!c) return () => {};
+  const buf = buffers.get(name);
+  if (buf === undefined) void load(name); // Not ready this time; the synth covers it.
+
+  const t = c.currentTime;
+  const out = c.createGain();
+  out.gain.setValueAtTime(0.0001, t);
+  out.gain.exponentialRampToValueAtTime(VOLUME[name], t + 0.12);
+  out.connect(c.destination);
+
+  const sources: AudioScheduledSourceNode[] = buf ? [loopFile(c, buf, out)] : windSynth(c, name, out);
+  sources.forEach((s) => s.start(t));
+
+  let stopped = false;
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    activeWinds.delete(stop);
+    const now = c.currentTime;
+    out.gain.cancelScheduledValues(now);
+    out.gain.setValueAtTime(Math.max(out.gain.value, 0.0001), now);
+    out.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
+    sources.forEach((s) => s.stop(now + 0.2));
+    window.setTimeout(() => out.disconnect(), 300);
+  };
+  activeWinds.add(stop);
+  return stop;
+}
+
+function loopFile(c: AudioContext, buf: AudioBuffer, out: AudioNode): AudioBufferSourceNode {
+  const src = c.createBufferSource();
+  src.buffer = buf;
+  src.loop = true;
+  src.connect(out);
+  return src;
+}
+
+/**
+ * A synthesized cassette wind: the motor's whine spinning up (rewind runs a little higher), a
+ * band of tape hiss, and a fast flutter from the reels, all looping until stopped.
+ */
+function windSynth(c: AudioContext, name: WindSound, out: AudioNode): AudioScheduledSourceNode[] {
+  const t = c.currentTime;
+  const base = name === 'rewind' ? 190 : 160;
+
+  // Motor whine, spinning up over the first second and a half.
+  const motor = c.createOscillator();
+  motor.type = 'sawtooth';
+  motor.frequency.setValueAtTime(base * 0.6, t);
+  motor.frequency.exponentialRampToValueAtTime(base * 1.6, t + 1.5);
+  const motorTone = c.createBiquadFilter();
+  motorTone.type = 'lowpass';
+  motorTone.frequency.value = 1100;
+  const motorGain = c.createGain();
+  motorGain.gain.value = 0.18;
+  motor.connect(motorTone).connect(motorGain).connect(out);
+
+  // Pitch wobble, so it sounds mechanical rather than like a synth note.
+  const wobble = c.createOscillator();
+  wobble.frequency.value = 6.5;
+  const wobbleDepth = c.createGain();
+  wobbleDepth.gain.value = base * 0.04;
+  wobble.connect(wobbleDepth).connect(motor.frequency);
+
+  // Tape hiss rushing past the heads.
+  const hiss = noise(c, 2);
+  hiss.loop = true;
+  const hissBand = c.createBiquadFilter();
+  hissBand.type = 'bandpass';
+  hissBand.frequency.setValueAtTime(900, t);
+  hissBand.frequency.exponentialRampToValueAtTime(name === 'rewind' ? 2600 : 2200, t + 1.5);
+  hissBand.Q.value = 0.9;
+  const hissGain = c.createGain();
+  hissGain.gain.value = 0.55;
+  hiss.connect(hissBand).connect(hissGain).connect(out);
+
+  // Reel flutter: the hiss pulses quickly as the spools turn.
+  const flutter = c.createOscillator();
+  flutter.frequency.setValueAtTime(9, t);
+  flutter.frequency.linearRampToValueAtTime(name === 'rewind' ? 17 : 14, t + 1.5);
+  const flutterDepth = c.createGain();
+  flutterDepth.gain.value = 0.22;
+  flutter.connect(flutterDepth).connect(hissGain.gain);
+
+  return [motor, wobble, hiss, flutter];
 }
 
 // ---------------------------------------------------------------------------
@@ -189,5 +298,9 @@ function synth(c: AudioContext, name: SfxName, out: AudioNode) {
       burst(c, out, { at: 0.4, dur: 0.04, freq: 1500, level: 0.6 });
       break;
     }
+    case 'fastForward':
+    case 'rewind':
+      // Winding sounds loop; they're played with startWinding, not as one-shots.
+      break;
   }
 }
