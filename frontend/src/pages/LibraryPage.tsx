@@ -9,12 +9,13 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { TapeSide } from '@runman/shared';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { Cassette3D, CASSETTE_ASPECT } from '@/components/cassette/Cassette3D';
 import { CassetteDrawer } from '@/components/cassette/CassetteDrawer';
 import { CassettePlayer, type DeckControl } from '@/components/cassette/CassettePlayer';
 import { cassetteStore, useCassettes } from '@/hooks/useCassettes';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useTapeDeck } from '@/hooks/useTapeDeck';
 import { playSfx } from '@/audio/sfx';
 import './library.css';
 
@@ -36,23 +37,18 @@ interface DragState {
 
 const REST_ROTATION = { x: -14, y: 22 };
 
+/** Router state other pages can pass when navigating here. */
+export interface LibraryLocationState {
+  /** Tape to put on the pedestal, e.g. the one just edited. */
+  focusId?: string;
+}
+
 /**
  * Library backdrop. 'welcome' uses the welcome page's dark gradient and twinkling starfield;
  * 'studio' is the original plain dark studio. Flip this to compare.
  */
 const BACKDROP: 'welcome' | 'studio' = 'welcome';
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
-
-const CONTROL_LABEL: Record<DeckControl, string> = {
-  pause: '❚❚ PAUSE',
-  play: '▶ PLAY',
-  rewind: '◀◀ REWIND',
-  fastForward: '▶▶ FAST FWD',
-  stop: '■ STOP',
-  record: '● REC',
-  flip: '⟲ FLIP',
-  eject: '⏏ EJECT',
-};
 
 function inside(el: Element | null, x: number, y: number, pad = 0) {
   if (!el) return false;
@@ -63,6 +59,7 @@ function inside(el: Element | null, x: number, y: number, pad = 0) {
 export function LibraryPage() {
   const cassettes = useCassettes();
   const navigate = useNavigate();
+  const location = useLocation();
   const small = useMediaQuery('(max-width: 760px)');
   const width = small ? 170 : 230;
   const height = width * CASSETTE_ASPECT;
@@ -78,7 +75,6 @@ export function LibraryPage() {
   const [zone, setZone] = useState<Zone>(null);
   const [animateRot, setAnimateRot] = useState(false);
   const [landKey, setLandKey] = useState(0);
-  const [lcd, setLcd] = useState<string | undefined>();
 
   const stageRef = useRef<HTMLDivElement>(null);
   const pedestalRef = useRef<HTMLDivElement>(null);
@@ -88,10 +84,10 @@ export function LibraryPage() {
   const drag = useRef<DragState | null>(null);
   const zoneRef = useRef<Zone>(null);
   const tiltTimer = useRef<number | undefined>(undefined);
-  const lcdTimer = useRef<number | undefined>(undefined);
 
   const active = cassettes.find((c) => c.id === activeId);
   const loaded = cassettes.find((c) => c.id === loadedId);
+  const deck = useTapeDeck(loaded, side);
 
   const toStage = useCallback((cx: number, cy: number) => {
     const r = stageRef.current!.getBoundingClientRect();
@@ -167,11 +163,12 @@ export function LibraryPage() {
     setDragMode('rotate');
   };
 
-  // Show the first tape on the pedestal when the page opens.
+  // When the page opens, show the tape we were sent back with (e.g. just edited), else the first.
+  const focusId = (location.state as LibraryLocationState | null)?.focusId;
   useEffect(() => {
-    const first = cassetteStore.getAll()[0];
-    if (first) placeOnStage(first.id);
-  }, [placeOnStage]);
+    const tape = (focusId && cassetteStore.get(focusId)) || cassetteStore.getAll()[0];
+    if (tape) placeOnStage(tape.id);
+  }, [placeOnStage, focusId]);
 
   // Window-level pointer tracking. The listeners are attached once and always delegate to the
   // latest handlers, so a fast drag whose pointerup lands before React re-renders isn't lost.
@@ -254,7 +251,6 @@ export function LibraryPage() {
   useEffect(
     () => () => {
       window.clearTimeout(tiltTimer.current);
-      window.clearTimeout(lcdTimer.current);
     },
     [],
   );
@@ -299,7 +295,7 @@ export function LibraryPage() {
 
   const onStagePointerDown = (e: React.PointerEvent) => {
     if (!activeId) return;
-    if ((e.target as HTMLElement).closest('.deck, .drawer, .edit-pad, button, a')) return;
+    if ((e.target as HTMLElement).closest('.deck, .drawer, .edit-pad, button, a, input')) return;
     e.preventDefault();
     beginRotate(e.clientX, e.clientY);
   };
@@ -311,21 +307,15 @@ export function LibraryPage() {
 
   const onControl = (control: DeckControl) => {
     if (control === 'eject') {
+      deck.press('eject');
       if (!loadedId) return;
       const id = loadedId;
       setLoadedId(null);
       if (!activeId) placeOnStage(id);
       return;
     }
-    if (control === 'flip') {
-      setSide((s) => (s === 'A' ? 'B' : 'A'));
-      return;
-    }
-    // Playback isn't implemented yet: just echo the key on the LCD.
-    // The playback dev should replace this with real transport logic.
-    setLcd(CONTROL_LABEL[control]);
-    window.clearTimeout(lcdTimer.current);
-    lcdTimer.current = window.setTimeout(() => setLcd(undefined), 1200);
+    deck.press(control);
+    if (control === 'flip') setSide((s) => (s === 'A' ? 'B' : 'A'));
   };
 
   const create = () => {
@@ -358,7 +348,15 @@ export function LibraryPage() {
             slotRef={slotRef}
             dropHover={zone === 'player'}
             onControl={onControl}
-            display={lcd}
+            latched={deck.latched}
+            spinning={deck.spinning}
+            display={deck.display}
+            progress={{
+              position: deck.position,
+              duration: deck.duration,
+              label: deck.trackCount ? `TRK ${deck.trackNumber}/${deck.trackCount}` : 'NO SONGS',
+              onSeek: deck.seek,
+            }}
           />
           <div ref={pedestalRef} className={`pedestal${active ? ' occupied' : ''}`}>
             <span className="pedestal-ring" />

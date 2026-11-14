@@ -1,0 +1,378 @@
+// Real playback for the RunMan deck. The loaded cassette's current side plays like a tape:
+// its tracks run back to back, and the transport keys drive one shared <audio> element.
+//
+//   PLAY ......... play from the current position
+//   PAUSE ........ freeze in place; press again to carry on (PLAY stays down)
+//   STOP ......... stop, pop every key up, rewind to the start of the current song
+//   FF / REW ..... wind through the side at WIND_SPEED (with a tape-whirr sound, not the song),
+//                  crossing song boundaries, and auto-stop with a clunk at either end.
+//                  Press PLAY to listen from wherever you land.
+//   FLIP / EJECT . stop and start over on the new side / tape
+//
+// The deck keeps a "tape position" (song index + seconds) of its own, so winding doesn't
+// have to download every song it passes; audio is only loaded when PLAY needs it.
+
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { Cassette, TapeSide, Track } from '@runman/shared';
+import { nextLatched, type DeckControl } from '@/components/cassette/CassettePlayer';
+import { playSfx, startWinding } from '@/audio/sfx';
+
+/** How many times faster than real time FF / REW move through the tape. */
+const WIND_SPEED = 16;
+const WIND_TICK_MS = 100;
+/** Re-sign an upload's playback URL when it has less than this left. */
+const URL_REFRESH_MS = 15_000;
+const NOTICE_MS = 2200;
+
+export interface TapeDeck {
+  /** Transport keys held down. */
+  latched: DeckControl[];
+  /** LCD text, or undefined for the player's default (tape name + side). */
+  display?: string;
+  /** Reels turn while the tape is actually moving. */
+  spinning: boolean;
+  track?: Track;
+  /** 1-based position of `track` on this side, and how many playable songs the side has. */
+  trackNumber: number;
+  trackCount: number;
+  /** Seconds into the current song, and its length. */
+  position: number;
+  duration: number;
+  press(control: DeckControl): void;
+  seek(seconds: number): void;
+}
+
+const playable = (t: Track) => Boolean(t.audioUrl || t.audioReference);
+
+async function resolveUrl(cassetteId: string, track: Track): Promise<{ url: string; expiresAt?: number }> {
+  if (track.audioReference) {
+    // Loaded lazily so tapes with only library songs never pull in the storage SDK.
+    const { audioStorage } = await import('@/audio/amplifyAudioStorage');
+    const { url, expiresAt } = await audioStorage.playback(cassetteId, track.audioReference);
+    return { url: url.toString(), expiresAt: expiresAt.getTime() };
+  }
+  if (track.audioUrl) return { url: track.audioUrl };
+  throw new Error('This song has no audio.');
+}
+
+export function useTapeDeck(cassette: Cassette | undefined, side: TapeSide): TapeDeck {
+  const tracks = useMemo(
+    () => (cassette ? cassette.tracks.filter((t) => t.side === side && playable(t)) : []),
+    [cassette, side],
+  );
+
+  const [latched, setLatchedState] = useState<DeckControl[]>([]);
+  const [index, setIndexState] = useState(0);
+  const [position, setPositionState] = useState(0);
+  const [loadedDuration, setLoadedDuration] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [audioRunning, setAudioRunning] = useState(false);
+  const [notice, setNotice] = useState<string>();
+
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const tracksRef = useRef(tracks);
+  tracksRef.current = tracks;
+  const cassetteIdRef = useRef(cassette?.id);
+  cassetteIdRef.current = cassette?.id;
+  const latchedRef = useRef<DeckControl[]>([]);
+  const indexRef = useRef(0);
+  const posRef = useRef(0);
+  /** Which song (by track id) the <audio> element currently holds, and when its URL expires. */
+  const loadedRef = useRef<{ trackId: string; expiresAt?: number } | null>(null);
+  /** Bumped on every transport change so a slow URL lookup can't start stale playback. */
+  const opRef = useRef(0);
+  const windTimer = useRef<number | undefined>(undefined);
+  const stopWindSound = useRef<(() => void) | undefined>(undefined);
+  const noticeTimer = useRef<number | undefined>(undefined);
+  const frame = useRef<number | undefined>(undefined);
+
+  const audio = () => {
+    if (!audioRef.current) {
+      audioRef.current = new Audio();
+      audioRef.current.preload = 'auto';
+    }
+    return audioRef.current;
+  };
+
+  const setLatched = (next: DeckControl[]) => {
+    latchedRef.current = next;
+    setLatchedState(next);
+  };
+  const setIndex = (i: number) => {
+    indexRef.current = i;
+    setIndexState(i);
+  };
+  const setPosition = (p: number) => {
+    posRef.current = p;
+    setPositionState(p);
+  };
+
+  const flash = (text: string) => {
+    setNotice(text);
+    window.clearTimeout(noticeTimer.current);
+    noticeTimer.current = window.setTimeout(() => setNotice(undefined), NOTICE_MS);
+  };
+
+  const isLoaded = (i: number) => loadedRef.current?.trackId === tracksRef.current[i]?.id;
+
+  /** Length of song i: the real decoded length if it's loaded, else what the tape recorded. */
+  const durationOf = (i: number) => {
+    const a = audioRef.current;
+    if (a && isLoaded(i) && Number.isFinite(a.duration) && a.duration > 0) return a.duration;
+    return tracksRef.current[i]?.durationSec ?? 0;
+  };
+
+  const stopWinding = () => {
+    window.clearInterval(windTimer.current);
+    windTimer.current = undefined;
+    stopWindSound.current?.();
+    stopWindSound.current = undefined;
+  };
+
+  /** The deck stopping itself (end of tape): keys clunk back up. */
+  const autoStop = (text: string) => {
+    halt(text);
+    playSfx('keyRelease');
+  };
+
+  const silence = () => {
+    opRef.current += 1;
+    setLoading(false);
+    const a = audioRef.current;
+    // Only a song that was actually playing has moved the tape; while winding, posRef leads.
+    if (a && !a.paused) {
+      a.pause();
+      if (isLoaded(indexRef.current)) setPosition(a.currentTime);
+    }
+  };
+
+  /** Everything stops and the keys pop up; the tape stays where it is. */
+  const halt = (text?: string) => {
+    stopWinding();
+    silence();
+    setLatched([]);
+    if (text) flash(text);
+  };
+
+  const startPlaying = async () => {
+    const op = ++opRef.current;
+    const i = indexRef.current;
+    const track = tracksRef.current[i];
+    const cassetteId = cassetteIdRef.current;
+    if (!track || !cassetteId) return;
+    const a = audio();
+    const loaded = loadedRef.current;
+    const stale = !isLoaded(i) || (loaded?.expiresAt !== undefined && loaded.expiresAt - Date.now() < URL_REFRESH_MS);
+    try {
+      if (stale) {
+        setLoading(true);
+        const { url, expiresAt } = await resolveUrl(cassetteId, track);
+        if (op !== opRef.current) return;
+        a.src = url;
+        loadedRef.current = { trackId: track.id, expiresAt };
+        setLoadedDuration(track.durationSec);
+      }
+      a.currentTime = posRef.current;
+      await a.play();
+      if (op === opRef.current) setLoading(false);
+    } catch (err) {
+      if (op !== opRef.current || (err instanceof DOMException && err.name === 'AbortError')) return;
+      console.warn('Playback failed:', err);
+      if (stale) loadedRef.current = null;
+      halt(`CAN'T PLAY ${track.title}`);
+    }
+  };
+
+  const windTick = (dir: 1 | -1) => {
+    const n = tracksRef.current.length;
+    let i = indexRef.current;
+    let p = posRef.current + (dir * WIND_SPEED * WIND_TICK_MS) / 1000;
+    if (dir > 0 && p >= durationOf(i)) {
+      if (i + 1 < n) {
+        i += 1;
+        p = 0;
+      } else {
+        setPosition(durationOf(i));
+        autoStop(`END OF SIDE ${side}`);
+        return;
+      }
+    } else if (dir < 0 && p <= 0) {
+      if (i > 0) {
+        i -= 1;
+        p = durationOf(i);
+      } else {
+        setPosition(0);
+        autoStop(`START OF SIDE ${side}`);
+        return;
+      }
+    }
+    if (i !== indexRef.current) setIndex(i);
+    setPosition(p);
+  };
+
+  /** Make the audio do whatever the keys now say. */
+  const apply = (keys: DeckControl[]) => {
+    stopWinding();
+    const paused = keys.includes('pause');
+    const dir = keys.includes('fastForward') ? 1 : keys.includes('rewind') ? -1 : 0;
+    if (keys.includes('play') && !paused) {
+      void startPlaying();
+    } else {
+      silence();
+    }
+    if (dir && !paused) {
+      windTimer.current = window.setInterval(() => windTick(dir), WIND_TICK_MS);
+      stopWindSound.current = startWinding(dir > 0 ? 'fastForward' : 'rewind');
+    }
+  };
+
+  const press = (control: DeckControl) => {
+    if (!cassette) return;
+    const n = tracksRef.current.length;
+
+    if (control === 'flip' || control === 'eject') {
+      halt();
+      return; // The page changes the side / unloads the tape; the reset effect below rewinds.
+    }
+    if (control === 'record') {
+      halt('RECORD SONGS IN THE EDITOR');
+      return;
+    }
+    if (control === 'stop') {
+      halt();
+      setPosition(0);
+      if (audioRef.current && isLoaded(indexRef.current)) audioRef.current.currentTime = 0;
+      return;
+    }
+    if (n === 0) {
+      halt(`SIDE ${side} IS BLANK`);
+      return;
+    }
+    // Pressing PLAY at the very end of the side starts the side over.
+    if (control === 'play' && indexRef.current === n - 1 && posRef.current >= durationOf(n - 1) - 0.25) {
+      setIndex(0);
+      setPosition(0);
+    }
+    const next = nextLatched(latchedRef.current, control);
+    setLatched(next);
+    setNotice(undefined);
+    apply(next);
+  };
+
+  const seek = (seconds: number) => {
+    const p = Math.max(0, Math.min(seconds, durationOf(indexRef.current)));
+    setPosition(p);
+    const a = audioRef.current;
+    if (a && isLoaded(indexRef.current)) a.currentTime = p;
+  };
+
+  // A new tape or a flipped side starts over at the first song with every key up.
+  useEffect(() => {
+    stopWinding();
+    opRef.current += 1;
+    const a = audioRef.current;
+    if (a) {
+      a.pause();
+      a.removeAttribute('src');
+      a.load();
+    }
+    loadedRef.current = null;
+    setLatched([]);
+    setIndex(0);
+    setPosition(0);
+    setLoading(false);
+    setNotice(undefined);
+  }, [cassette?.id, side]);
+
+  // If songs are removed while the tape is in, don't point past the end of the side.
+  useEffect(() => {
+    if (indexRef.current >= tracks.length && tracks.length > 0) {
+      halt();
+      setIndex(tracks.length - 1);
+      setPosition(0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tracks.length]);
+
+  // Audio element events: smooth progress while playing, and songs running into each other.
+  useEffect(() => {
+    const a = audio();
+    const tick = () => {
+      if (isLoaded(indexRef.current)) setPosition(a.currentTime);
+      frame.current = requestAnimationFrame(tick);
+    };
+    const onPlay = () => {
+      setAudioRunning(true);
+      cancelAnimationFrame(frame.current ?? 0);
+      frame.current = requestAnimationFrame(tick);
+    };
+    const onPause = () => {
+      setAudioRunning(false);
+      cancelAnimationFrame(frame.current ?? 0);
+    };
+    const onMeta = () => {
+      if (Number.isFinite(a.duration)) setLoadedDuration(a.duration);
+    };
+    const onEnded = () => {
+      const i = indexRef.current;
+      if (i + 1 < tracksRef.current.length) {
+        setIndex(i + 1);
+        setPosition(0);
+        void startPlaying();
+      } else {
+        autoStop(`END OF SIDE ${side}`);
+        setIndex(0);
+        setPosition(0);
+      }
+    };
+    a.addEventListener('play', onPlay);
+    a.addEventListener('pause', onPause);
+    a.addEventListener('loadedmetadata', onMeta);
+    a.addEventListener('ended', onEnded);
+    return () => {
+      a.removeEventListener('play', onPlay);
+      a.removeEventListener('pause', onPause);
+      a.removeEventListener('loadedmetadata', onMeta);
+      a.removeEventListener('ended', onEnded);
+      cancelAnimationFrame(frame.current ?? 0);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [side]);
+
+  // Leaving the page stops the music.
+  useEffect(
+    () => () => {
+      stopWinding();
+      window.clearTimeout(noticeTimer.current);
+      opRef.current += 1;
+      audioRef.current?.pause();
+      audioRef.current?.removeAttribute('src');
+    },
+    [],
+  );
+
+  const track = tracks[index];
+  const duration = track && isLoaded(index) && loadedDuration > 0 ? loadedDuration : (track?.durationSec ?? 0);
+  const winding = !latched.includes('pause') && (latched.includes('fastForward') || latched.includes('rewind'));
+
+  let display: string | undefined;
+  if (notice) display = notice;
+  else if (track && loading) display = `LOADING · ${track.title}`;
+  else if (track && latched.includes('fastForward')) display = `▶▶ ${track.title}`;
+  else if (track && latched.includes('rewind')) display = `◀◀ ${track.title}`;
+  else if (track && latched.includes('play')) display = `${latched.includes('pause') ? '❚❚' : '▶'} ${track.title}`;
+  else if (latched.includes('pause')) display = '❚❚ PAUSE';
+
+  return {
+    latched,
+    display,
+    spinning: audioRunning || winding,
+    track,
+    trackNumber: track ? index + 1 : 0,
+    trackCount: tracks.length,
+    position: Math.min(position, duration || position),
+    duration,
+    press,
+    seek,
+  };
+}

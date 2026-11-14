@@ -17,6 +17,7 @@ const AuthGate = lazy(() => import('./components/AuthGate').then((module) => ({ 
 export const router = createBrowserRouter([
   // Signed-out screens render full-bleed, outside the app Layout.
   { path: '/', element: <WelcomePage /> },
+  { path: '/welcome', element: <WelcomePage /> },
   { path: '/login', element: <LoginPage /> },
   {
     element: <Layout />,

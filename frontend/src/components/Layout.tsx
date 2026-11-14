@@ -14,7 +14,7 @@ export function Layout() {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <NavLink to="/library" className="brand">
+        <NavLink to="/welcome" className="brand" aria-label="RunMan welcome page">
           runman
         </NavLink>
         <nav className="nav">

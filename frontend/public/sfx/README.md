@@ -10,10 +10,13 @@ Any file that's missing keeps using the synth fallback.
 | `eject.mp3`       | The EJECT button is pressed    |
 | `insert.mp3`      | A tape is dropped into the door |
 | `flip.mp3`        | FLIP turns the tape over       |
+| `fast-forward.mp3` | Loops while FF winds the tape  |
+| `rewind.mp3`      | Loops while REW winds the tape |
 
 Using `.wav` or `.ogg` instead? Change the extension in `SFX_FILES` in
 `frontend/src/audio/sfx.ts`. Volumes per sound are set there too.
 
 Tips: keep clips short (under half a second) and trim the silence at the start so
-they line up with the button press. Only add sounds you have the rights to use
+they line up with the button press. The two winding sounds are the exception: they
+loop for as long as the key is down, so make them a second or two and loop seamlessly. Only add sounds you have the rights to use
 (for example CC0 sounds from freesound.org or your own recordings).

@@ -8,6 +8,9 @@ import { newId } from '@/hooks/useCassettes';
 import { AudioInput, type UploadedAudioMetadata } from '@/components/AudioInput';
 import { SIDE_CAPACITY_SEC } from './constants';
 
+/** Below this much free tape a side shows as full (no real song fits in under a minute). */
+const NEARLY_FULL_SEC = 60;
+
 interface TrackListProps {
   cassette: Cassette;
   side: TapeSide;
@@ -29,7 +32,13 @@ export function TrackList({ cassette, side, onSideChange, onChange }: TrackListP
 
   const sideTracks = cassette.tracks.filter((t) => t.side === side);
   const used = sideTracks.reduce((sum, t) => sum + t.durationSec, 0);
-  const pct = Math.min(100, (used / SIDE_CAPACITY_SEC) * 100);
+  // A C60 tape holds 30 minutes a side: nothing gets added past that.
+  const remaining = Math.max(0, SIDE_CAPACITY_SEC - used);
+  const full = remaining < 1;
+  // With under a minute left there's no room for a real song, so the meter reads as full.
+  const nearlyFull = remaining < NEARLY_FULL_SEC;
+  const pct = nearlyFull ? 100 : Math.min(100, (used / SIDE_CAPACITY_SEC) * 100);
+  const fits = (durationSec: number) => durationSec <= remaining;
 
   const move = (id: string, dir: -1 | 1) => {
     const ids = sideTracks.map((t) => t.id);
@@ -56,7 +65,8 @@ export function TrackList({ cassette, side, onSideChange, onChange }: TrackListP
 
   const remove = (id: string) => onChange(cassette.tracks.filter((t) => t.id !== id));
 
-  const add = (song: SongResult) =>
+  const add = (song: SongResult) => {
+    if (!fits(song.durationSec)) return;
     onChange([
       ...cassette.tracks,
       {
@@ -72,8 +82,13 @@ export function TrackList({ cassette, side, onSideChange, onChange }: TrackListP
         source: 'library',
       },
     ]);
+  };
 
-  const addUpload = (reference: StoredAudioReference, metadata: UploadedAudioMetadata) =>
+  const addUpload = (reference: StoredAudioReference, metadata: UploadedAudioMetadata) => {
+    // AudioInput already blocks clips that don't fit; this is the last line of defence.
+    if (!fits(metadata.durationSec)) {
+      throw new Error(`Side ${side} only has ${formatTime(remaining)} left on the tape.`);
+    }
     onChange([
       ...cassette.tracks,
       {
@@ -86,6 +101,7 @@ export function TrackList({ cassette, side, onSideChange, onChange }: TrackListP
         source: 'upload',
       },
     ]);
+  };
 
   return (
     <section className="panel tracks">
@@ -105,10 +121,20 @@ export function TrackList({ cassette, side, onSideChange, onChange }: TrackListP
         </div>
       </header>
 
-      <div className="tape-meter" title="C60 tape: 30 minutes per side">
-        <div className="tape-meter-fill" style={{ width: `${pct}%` }} />
+      <div
+        className={`tape-meter${nearlyFull ? ' full' : ''}`}
+        style={{ '--pct': `${pct}%` } as React.CSSProperties}
+        title="C60 tape: 30 minutes per side"
+        role="meter"
+        aria-label={`Side ${side} tape used`}
+        aria-valuemin={0}
+        aria-valuemax={SIDE_CAPACITY_SEC}
+        aria-valuenow={Math.min(used, SIDE_CAPACITY_SEC)}
+        aria-valuetext={`${formatTime(used)} of ${formatTime(SIDE_CAPACITY_SEC)} used`}
+      >
         <span>
           {formatTime(used)} / {formatTime(SIDE_CAPACITY_SEC)}
+          {full ? ' · FULL' : nearlyFull ? ` · ${formatTime(remaining)} LEFT` : ''}
         </span>
       </div>
 
@@ -182,14 +208,15 @@ export function TrackList({ cassette, side, onSideChange, onChange }: TrackListP
         </ol>
       )}
 
-      <button type="button" className="studio-btn primary" onClick={() => setPickerOpen(true)}>
-        + Add songs to side {side}
+      <button type="button" className="studio-btn primary" onClick={() => setPickerOpen(true)} disabled={full}>
+        {full ? `Side ${side} is full (30:00)` : `+ Add songs to side ${side}`}
       </button>
 
       {pickerOpen && (
         <SongPicker
           cassetteId={cassette.id}
           side={side}
+          remainingSec={remaining}
           onAdd={add}
           onAddUpload={addUpload}
           onClose={() => setPickerOpen(false)}
@@ -202,12 +229,15 @@ export function TrackList({ cassette, side, onSideChange, onChange }: TrackListP
 function SongPicker({
   cassetteId,
   side,
+  remainingSec,
   onAdd,
   onAddUpload,
   onClose,
 }: {
   cassetteId: string;
   side: TapeSide;
+  /** Tape time still free on this side. */
+  remainingSec: number;
   onAdd: (s: SongResult) => void;
   onAddUpload: (reference: StoredAudioReference, metadata: UploadedAudioMetadata) => void;
   onClose: () => void;
@@ -272,7 +302,12 @@ function SongPicker({
     <div className="picker-backdrop studio-vars" onClick={onClose}>
       <div className="picker" role="dialog" aria-label="Song library" onClick={(e) => e.stopPropagation()}>
         <header className="panel-head">
-          <h2>{query ? `Search results · Side ${side}` : `Recommended songs · Side ${side}`}</h2>
+          <h2>
+            {query ? `Search results · Side ${side}` : `Recommended songs · Side ${side}`}
+            <small className={`picker-remaining${remainingSec < 60 ? ' low' : ''}`}>
+              {formatTime(remainingSec)} left
+            </small>
+          </h2>
           <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
             ✕
           </button>
@@ -298,7 +333,13 @@ function SongPicker({
           </button>
         </div>
         {source === 'upload' ? (
-          <AudioInput key={`${cassetteId}-${side}`} cassetteId={cassetteId} onUploaded={onAddUpload} />
+          <AudioInput
+            key={`${cassetteId}-${side}`}
+            cassetteId={cassetteId}
+            onUploaded={onAddUpload}
+            maxDurationSec={remainingSec}
+            limitLabel={`Side ${side}`}
+          />
         ) : (
           <>
       <input
@@ -320,8 +361,11 @@ function SongPicker({
           <p className="studio-muted">Searching…</p>
         ) : (
           <ul className="track-rows">
-            {results.map((r) => (
-              <li key={r.id} className="track-row">
+            {results.map((r) => {
+              const added = addedIds.has(r.id);
+              const tooLong = !added && r.durationSec > remainingSec;
+              return (
+              <li key={r.id} className={`track-row${tooLong ? ' too-long' : ''}`}>
                 {r.artworkUrl ? (
                   <img className="track-artwork" src={r.artworkUrl} alt="" />
                 ) : (
@@ -335,17 +379,20 @@ function SongPicker({
                 {r.audioUrl && <audio className="track-preview" controls preload="none" src={r.audioUrl} />}
                 <button
                   type="button"
-                  className={`studio-btn${addedIds.has(r.id) ? ' song-added' : ''}`}
+                  className={`studio-btn${added ? ' song-added' : ''}`}
                   onClick={() => {
+                    if (tooLong) return;
                     onAdd(r);
                     setAddedIds((ids) => new Set(ids).add(r.id));
                   }}
-                  disabled={addedIds.has(r.id)}
+                  disabled={added || tooLong}
+                  title={tooLong ? `Only ${formatTime(remainingSec)} left on side ${side}` : undefined}
                 >
-                  {addedIds.has(r.id) ? 'Song Added' : 'Add'}
+                  {added ? 'Song Added' : tooLong ? 'Too long' : 'Add'}
                 </button>
               </li>
-            ))}
+              );
+            })}
             {query && results.length === 0 && <p className="studio-muted">No matches.</p>}
           </ul>
         )}
