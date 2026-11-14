@@ -1,5 +1,19 @@
 /* Design tokens — change these to re-theme the whole app. */
 :root {
+  /* RUNMAN brand palette. Accent is for sparing highlights only (focus rings, small details). */
+  --brand-accent: #e86012;
+  --brand-primary: #3e7cb1;
+  --brand-primary-dark: #2a5a85;
+  --brand-primary-deep: #173651;
+  --brand-secondary: #81a4cd;
+  --brand-background: #dbe4ee;
+  --brand-dark-background: #0a0a0a;
+  --brand-dark-background-light: #3a3a3a;
+  --brand-gray: #737373;
+  --brand-gray-light: #e5e5e5;
+  --font-editorial: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --font-nav: 'Jost', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
   --color-bg: #f8fafc;
   --color-surface: #ffffff;
   --color-text: #0f172a;
@@ -18,7 +32,9 @@
   --space-6: 24px;
   --space-8: 32px;
 
-  --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* App fonts (retro theme): Rubik for body/UI text, Righteous for headings and logos. */
+  --font: 'Rubik', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Righteous', 'Rubik', system-ui, sans-serif;
   color-scheme: light dark;
 }
 
@@ -226,6 +242,42 @@ a {
   color: var(--color-ok);
 }
 
+/* Keep the managed sign-in flow aligned with the app's light/dark tokens. */
+.identity-flow {
+  --amplify-colors-background-primary: var(--color-surface);
+  --amplify-colors-background-secondary: var(--color-bg);
+  --amplify-colors-font-primary: var(--color-text);
+  --amplify-colors-font-secondary: var(--color-muted);
+  --amplify-colors-font-interactive: var(--color-primary);
+  --amplify-colors-font-error: var(--color-danger);
+  --amplify-colors-border-primary: var(--color-border);
+  --amplify-colors-border-secondary: var(--color-border);
+  --amplify-colors-brand-primary-80: var(--color-primary);
+  --amplify-colors-brand-primary-90: var(--color-primary-hover);
+  --amplify-colors-brand-primary-100: var(--color-primary-hover);
+  --amplify-fonts-default-variable: var(--font);
+  --amplify-fonts-default-static: var(--font);
+}
+
+.identity-flow [data-amplify-router] {
+  width: min(100%, 30rem);
+}
+
+.session-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  overflow-wrap: anywhere;
+}
+
+.btn:focus-visible,
+.nav-link:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: var(--space-1);
+}
+
 @media (max-width: 600px) {
   .app-header {
     flex-direction: column;
@@ -257,4 +309,21 @@ a {
 
 .app-shell:has(.studio) .app-footer {
   display: none;
+}
+
+/* Display font: headings, logos and the big chunky labels. Righteous has a single weight,
+   so turn off faux-bold to keep its shapes clean. */
+h1,
+h2,
+h3,
+.brand,
+.wm-logo strong,
+.cf-label-band,
+.side-switch button,
+.side-mini button,
+.side-block-head,
+.drawer-create,
+.edit-pad {
+  font-family: var(--font-display);
+  font-synthesis: none;
 }

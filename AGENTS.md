@@ -16,6 +16,7 @@ Humans: if you add a subagent or skill, document it in the tables below.
 | `frontend/` | React 19 + TypeScript + Vite + React Router. UI/UX pages.                  |
 | `backend/`  | Node + Express 5 API. Runs locally and on AWS Lambda (via `serverless-http`). |
 | `shared/`   | `@runman/shared`: TypeScript types shared by frontend and backend.        |
+| `amplify/`  | Legacy Gen 2 reference only; DO NOT DEPLOY in AWS Academy Learner Lab.    |
 | `.claude/`  | Claude Code subagents (`agents/`) and skills (`skills/`).                  |
 
 ## Commands
@@ -28,6 +29,17 @@ Run from the repo root.
 | `npm run dev`          | Backend on :4000 + frontend on :5173 together          |
 | `npm run typecheck`    | `tsc` across all workspaces. **Run before finishing a task.** |
 | `npm run build`        | Lambda bundle (`backend/dist/`) + frontend (`frontend/dist/`) |
+| `npm run sticker -- <name>` | Add a Reicon icon to the cassette sticker tray (`--filled`, `--search <term>`) |
+| `npm run typecheck:amplify` | Check Amplify definitions without deploying AWS resources |
+| `npm run test:legacy-api` | Typecheck and test local-example/API exposure boundaries |
+
+## AWS deployment boundary
+
+- Current environment is AWS Academy Learner Lab: no custom IAM role creation. Authentication uses a standalone Cognito user pool and public SPA client with no secret; branded forms call the Amplify Auth SDK and share its session store/guards. No identity pool is required. This authentication path does not use Gen 2/CDK/SAM; do not deploy retained scaffolds unchanged or create backend deployment roles. Other deployments using precreated LabRole require separate review.
+- Preserve `backend/` Express/SAM examples for local development; they have no user ownership enforcement and must not serve private cassette data. `/api/items` is disabled by default, requires exact `NODE_ENV=development` plus `ENABLE_LEGACY_EXAMPLES=true`, and is always disabled by AWS execution markers or the Lambda entry point. Keep `/api/health` public.
+- Region: `us-west-2` preferred; lab also permits `us-east-1`. Public IDs go in ignored `frontend/cognito-config.json` (example committed); map only the standalone user-pool configuration. No fallback to Gen 2 outputs. This browser-bundled file must never contain secrets, temporary lab keys, or LabRole credentials.
+- Lab access is via the Academy console/session and temporary lab credentials, not IAM Identity Center SSO. `LabRole` is for supported server-side services, never browser credentials. Hosting permission/config delivery remain unverified; `amplify.yml` is a static-build recipe with no provisioning commands.
+- Do not deploy/create/delete AWS resources without the current checkpoint's authorization. Typechecking/building is local; running a sandbox creates cloud resources.
 
 ## Conventions
 
@@ -68,7 +80,7 @@ picks them automatically based on their `description`, or you can ask for one by
 | Agent          | File                              | Use it for                                                    |
 | -------------- | --------------------------------- | ------------------------------------------------------------- |
 | `frontend-ui`  | `.claude/agents/frontend-ui.md`   | Building/restyling React pages and components                 |
-| `backend-aws`  | `.claude/agents/backend-aws.md`   | API routes, services, DynamoDB/S3, SAM template changes       |
+| `backend-aws`  | `.claude/agents/backend-aws.md`   | Amplify infrastructure and retained Express API/services    |
 | `code-reviewer`| `.claude/agents/code-reviewer.md` | Read-only review of a change before you push/merge            |
 
 **Adding a subagent:** create `.claude/agents/<name>.md`, keep the `description` specific

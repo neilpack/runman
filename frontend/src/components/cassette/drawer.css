@@ -1,5 +1,11 @@
+/* Wooden cabinet drawer. The aside slides on translateX; the front panel sticks out on the
+   left so it stays visible (and grabbable) when the drawer is shut. */
 .drawer {
   --drawer-w: 290px;
+  --front-w: 44px;
+  --wood: var(--studio-wood);
+  --wood-dark: var(--studio-wood-dark);
+  --wood-light: #b86f12;
   position: absolute;
   top: 0;
   right: 0;
@@ -7,66 +13,187 @@
   width: var(--drawer-w);
   max-width: 85vw;
   display: flex;
-  flex-direction: column;
-  background:
-    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.06) 0 2px, transparent 2px 22px),
-    linear-gradient(180deg, var(--studio-wood), var(--studio-wood-dark));
-  box-shadow: -18px 0 40px rgba(0, 0, 0, 0.45);
   transform: translateX(100%);
-  transition:
-    transform 0.45s cubic-bezier(0.34, 1.3, 0.64, 1),
-    outline-color 0.2s;
+  transition: transform 0.5s cubic-bezier(0.34, 1.25, 0.64, 1);
   z-index: 20;
-  outline: 3px solid transparent;
-  outline-offset: -3px;
 }
 
 .drawer.open {
   transform: translateX(0);
 }
 
-.drawer.drop-hover {
-  outline-color: var(--studio-accent);
-}
-
-.drawer-handle {
+/* The cabinet continues past the drawer's right edge, so mid-drag (or on a very wide
+   screen) you never see a gap behind it. */
+.drawer::after {
+  content: '';
   position: absolute;
-  left: -46px;
-  top: 50%;
-  width: 46px;
-  height: 64px;
-  margin-top: -32px;
-  border: none;
-  border-radius: 14px 0 0 14px;
-  background: var(--studio-wood);
-  box-shadow: -8px 0 18px rgba(0, 0, 0, 0.35);
-  cursor: pointer;
-  display: grid;
-  place-items: center;
-  color: #1b1209;
+  top: 0;
+  bottom: 0;
+  left: 100%;
+  width: 100vw;
+  background: linear-gradient(90deg, #2a1801, #1c1001);
+  pointer-events: none;
 }
 
-.drawer-handle svg {
-  width: 34px;
-  fill: currentColor;
+/* While the user is pulling, follow the finger exactly. */
+.drawer.pulling {
+  transition: none;
 }
 
-.drawer-handle-gem {
-  fill: #fff7ed;
-  stroke: #1b1209;
-  stroke-width: 1.2;
+/* ---- Drawer front (the face you pull) ---- */
+.drawer-front {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--front-w) * -1);
+  width: var(--front-w);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background:
+    repeating-linear-gradient(180deg, rgba(0, 0, 0, 0.07) 0 3px, transparent 3px 19px),
+    linear-gradient(90deg, var(--wood-light), var(--wood) 45%, var(--wood-dark));
+  box-shadow:
+    inset 2px 0 0 rgba(255, 255, 255, 0.25),
+    inset -3px 0 0 rgba(0, 0, 0, 0.35),
+    -14px 0 28px rgba(0, 0, 0, 0.5);
+  border-radius: 10px 0 0 10px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  z-index: 2;
 }
 
-.drawer-handle:hover {
-  filter: brightness(1.1);
+.drawer-front:active {
+  cursor: grabbing;
+}
+
+.drawer-front:focus-visible {
+  outline: 2px solid #fff7ed;
+  outline-offset: -4px;
+}
+
+/* Bevelled inset panel on the front */
+.drawer-front::before {
+  content: '';
+  position: absolute;
+  inset: 14px 8px;
+  border-radius: 6px;
+  box-shadow:
+    inset 1px 1px 0 rgba(0, 0, 0, 0.35),
+    inset -1px -1px 0 rgba(255, 255, 255, 0.18);
+  pointer-events: none;
+}
+
+.drawer-front-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  letter-spacing: 0.4em;
+  color: rgba(27, 18, 9, 0.75);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.drawer-front-count {
+  min-width: 22px;
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: rgba(27, 18, 9, 0.55);
+  color: #fff7ed;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+/* Brass pull handle */
+.drawer-pull {
+  position: relative;
+  width: 16px;
+  height: 74px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #8a6420, #f6d27a 40%, #c79a3a 70%, #7a5418);
+  box-shadow:
+    0 3px 6px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  transition: transform 0.15s;
+}
+
+.drawer-pull span {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 10px;
+  bottom: 10px;
+  border-radius: 4px;
+  background: rgba(60, 40, 10, 0.55);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.drawer-front:hover .drawer-pull {
+  transform: translateX(-2px);
+}
+
+/* ---- Interior box ---- */
+.drawer-box {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background:
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.08) 0 2px, transparent 2px 26px),
+    linear-gradient(180deg, #5a3302, #4a2a02);
+  /* walls casting shadow onto the drawer floor */
+  box-shadow:
+    inset 22px 0 26px -14px rgba(0, 0, 0, 0.75),
+    inset 0 22px 24px -16px rgba(0, 0, 0, 0.7),
+    inset 0 -22px 24px -16px rgba(0, 0, 0, 0.7),
+    -18px 0 40px rgba(0, 0, 0, 0.45);
+  outline: 3px solid transparent;
+  outline-offset: -3px;
+  transition: outline-color 0.2s;
+}
+
+/* Top and bottom side-walls of the drawer, seen at an angle */
+.drawer-box::before,
+.drawer-box::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 12px;
+  background: linear-gradient(180deg, var(--wood-light), var(--wood));
+  pointer-events: none;
+  z-index: 1;
+}
+
+.drawer-box::before {
+  top: 0;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
+}
+
+.drawer-box::after {
+  bottom: 0;
+  background: linear-gradient(0deg, var(--wood-dark), var(--wood));
+  box-shadow: 0 -2px 0 rgba(0, 0, 0, 0.4);
+}
+
+.drawer.drop-hover .drawer-box {
+  outline-color: var(--studio-accent);
 }
 
 .drawer-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  padding: 20px 20px 8px;
+  padding: 26px 20px 8px;
   color: #fff7ed;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
 
 .drawer-head h2 {
@@ -85,7 +212,7 @@
   margin: 0 16px 8px;
   padding: 6px;
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.35);
   color: #fff7ed;
   text-align: center;
   font-size: 0.8rem;
@@ -95,14 +222,14 @@
   flex: 1;
   list-style: none;
   margin: 0;
-  padding: 8px 16px;
+  padding: 10px 18px 10px 22px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
-/* A cassette seen edge-on, like on a shelf. */
+/* A cassette standing on its edge in the drawer: top face highlight + shadow on the floor. */
 .spine {
   position: relative;
   display: flex;
@@ -110,12 +237,14 @@
   gap: 8px;
   min-height: 46px;
   padding: 6px 10px 6px 14px;
-  border-radius: 8px;
+  border-radius: 7px;
   background: var(--shell);
   box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.35),
-    inset 0 -4px 0 rgba(0, 0, 0, 0.25),
-    0 4px 10px rgba(0, 0, 0, 0.3);
+    inset 0 3px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -5px 0 rgba(0, 0, 0, 0.28),
+    inset 4px 0 0 rgba(255, 255, 255, 0.12),
+    0 8px 0 -2px color-mix(in srgb, var(--shell) 55%, #000),
+    0 14px 14px rgba(0, 0, 0, 0.45);
   cursor: grab;
   touch-action: pan-y;
   user-select: none;
@@ -125,7 +254,7 @@
 }
 
 .spine:hover {
-  transform: translateX(-8px) rotate(-1deg);
+  transform: translate(-8px, -3px) rotate(-1deg);
 }
 
 .spine:active {
@@ -186,14 +315,16 @@
 }
 
 .drawer-create {
-  margin: 12px 16px 18px;
+  position: relative;
+  z-index: 2;
+  margin: 12px 18px 24px 22px;
   padding: 12px;
   border: 2px dashed rgba(255, 247, 237, 0.6);
   border-radius: 14px;
   background: rgba(0, 0, 0, 0.35);
   color: #fff7ed;
   font: inherit;
-  font-weight: 700;
+  font-family: var(--font-display);
   cursor: pointer;
 }
 

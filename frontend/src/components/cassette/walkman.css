@@ -349,3 +349,43 @@
     zoom: 0.62;
   }
 }
+
+/* Sound on/off toggle next to the side lamp */
+.wm-head {
+  gap: 8px;
+}
+
+.wm-logo {
+  margin-right: auto;
+}
+
+.wm-mute {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.45);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+  color: #a5b4cf;
+  cursor: pointer;
+}
+
+.wm-mute svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.wm-mute:hover {
+  color: #fff;
+}
+
+.wm-mute.muted {
+  color: #6b7280;
+}

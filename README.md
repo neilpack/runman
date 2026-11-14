@@ -33,11 +33,11 @@ Built for **iHack 2026** (BYU-Idaho CSE Department Computing Society) — Theme:
 | Audio playback and effects | Web Audio API (Howler.js optional) |
 | Recording | MediaRecorder API |
 | Music library | Jamendo API (Creative Commons music) |
-| Backend | AWS Amplify Gen 2 |
-| Database | Amazon DynamoDB |
-| File storage (recordings, uploads) | Amazon S3 |
-| Auth (optional) | Amazon Cognito |
-| Hosting | AWS Amplify Hosting |
+| Backend | Retained Express local examples; private APIs are separate work |
+| Database | DynamoDB originally planned; outside this authentication checkpoint |
+| File storage (recordings, uploads) | Separate audio work; no implementation in this chat |
+| Auth | Standalone Cognito user pool + public SPA client; branded forms using Amplify Auth SDK |
+| Hosting | Static build only; Learner Lab hosting permissions not yet confirmed |
 
 ---
 
@@ -50,8 +50,8 @@ the locked dependencies for all workspaces.
 
 | Work | Installed tooling |
 |---|---|
-| AWS infrastructure | Root dev dependencies: `@aws-amplify/backend`, `@aws-amplify/backend-cli`, `aws-cdk-lib`, `constructs`, `@types/node` |
-| Frontend AWS access | `aws-amplify` for auth, data, and storage |
+| Legacy infrastructure reference | Root Amplify backend/CLI and CDK dev dependencies retained for reference/typecheck; do not deploy in Learner Lab |
+| Frontend authentication | `aws-amplify` configured for an existing Cognito user pool, without identity-pool credentials |
 | Sign-in components | `@aws-amplify/ui-react` |
 | Existing backend AWS helpers | AWS SDK v3 DynamoDB/S3 clients, document client, and S3 presigner |
 | Music search and audio | Browser `fetch`, audio/Web Audio, and MediaRecorder APIs; no extra library required |
@@ -65,23 +65,21 @@ AWS runtime access also needs generated backend outputs and Amplify configuratio
 packages alone do not provision resources. Identity implementation is a separate change.
 Do not put AWS credentials in frontend code or commit generated outputs.
 
-The Amplify CLI crashes under this machine's Node 25.2.1 in `@typescript/vfs`;
-use Node 24 LTS and verify the CLI before deployment. AWS CLI is installed separately
-from npm dependencies. Commands below that create a cloud sandbox belong to the
-later deployment workflow, not installing this tooling.
+AWS CLI is installed separately from npm dependencies. Cloud provisioning is a
+later checkpoint, not part of installing tooling or running the frontend.
 
 Every team member needs:
 
-- [Node.js (LTS)](https://nodejs.org/)
+- [Node.js 24 LTS](https://nodejs.org/) (`.nvmrc` pins major 24)
 - [Git](https://git-scm.com/downloads)
 - [VS Code](https://code.visualstudio.com/) (recommended), with [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) and [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)
-- [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
+- [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) only for a later approved optional lab CLI workflow; not needed for local UI or Console access
 - Chrome or Edge (for DevTools and microphone support)
 
 Accounts:
 
 - A GitHub account with access to this repo
-- AWS access on the team account (IAM or IAM Identity Center user — don't share the root login)
+- AWS Academy Learner Lab console access through the course session; no IAM Identity Center SSO or shared root login
 - Jamendo client ID (one per team) from the [Jamendo developer portal](https://devportal.jamendo.com/)
 
 Verify your setup:
@@ -89,7 +87,6 @@ Verify your setup:
 ```bash
 node -v
 git --version
-aws --version
 ```
 
 ---
@@ -101,32 +98,81 @@ aws --version
 ```bash
 git clone <repo-url>
 cd runman
-npm install
+npm ci
 ```
 
-### 2. Configure AWS credentials
+### 2. Learner Lab access
 
-```bash
-aws configure        # or: aws configure sso
-```
-
-See [Amplify Gen 2: Configure AWS for local development](https://docs.amplify.aws/react/start/account-setup/).
+Local UI/builds need no AWS credentials. The current lab permits Cognito user
+pools/app clients, but no custom IAM roles. Use Academy session/Console access
+for the later approved pool setup; optional CLI access uses the lab's expiring
+access key, secret key, and session token outside the repository. See
+[authentication setup](AUTH_DEPLOYMENT.md). Do not configure SSO or embed LabRole
+credentials in the browser.
 
 ### 3. Environment variables
 
-Create a `.env.local` file in the project root (do not commit it):
+Create `backend/.env` from `backend/.env.example` (do not commit it), then set:
 
 ```
-VITE_JAMENDO_CLIENT_ID=your_client_id_here
+JAMENDO_CLIENT_ID=your_client_id_here
 ```
 
-### 4. Start a personal cloud sandbox
+### 4. Standalone Cognito configuration (checkpoint 4A)
 
-```bash
-npx ampx sandbox
-```
+The approved Learner Lab path uses a standalone user pool and a public SPA client
+with **no client secret**, no identity pool, and no custom IAM roles. Prefer
+`us-west-2`; the local adapter also permits the lab's `us-east-1`. The previous
+Gen 2/backend-provisioning plan is superseded for this lab. `amplify/` and SAM
+remain reference only: do not deploy them unchanged for this auth path or start a sandbox.
 
-This deploys your own temporary backend (DynamoDB, S3, etc.) so you don't affect teammates.
+For a pool/client already created through the approved lab Console, copy
+`frontend/cognito-config.example.json` to ignored `frontend/cognito-config.json`
+and replace its fake region/pool/client IDs with the public values. This is manual
+config, not generated outputs, and there is no fallback to `amplify_outputs.json`.
+The adapter validates allowed regions/IDs and explicitly configures only
+`Auth.Cognito` before rendering. It does not configure AWS credentials, API, or storage.
+The raw JSON is embedded in the browser bundle: never put secrets in it even if
+unknown fields are rejected. Restart/rebuild after changing the file.
+
+Root `amplify.yml` now contains only static install/check/build steps and no AWS
+provisioning. Hosting availability and config delivery remain undecided; a fresh
+checkout lacks the ignored file and intentionally builds with sign-in unavailable.
+See [authentication setup](AUTH_DEPLOYMENT.md) for future pool/client settings and
+live checks. The supplied public IDs are configured locally; actual account/email
+flows and app-client settings have not been verified by the implementation agent.
+
+The local cassette library at `/`, editor at `/cassettes/:id/edit`, Status, and About
+remain public prototypes. The branded `/login` form uses Cognito SRP through the
+Amplify SDK for sign-up, email confirmation/resend, password reset, and sign-in.
+Same-session sign-up confirmation completes SDK-managed SRP auto-sign-in and then
+opens `/library`. If that temporary SDK context expired/reloaded, confirmation
+returns to login with a clear message; passwords are not saved by the app.
+Welcome/login redirect confirmed sessions to `/library`; dashboard and login share
+one SDK-backed session store, with no custom session cookie. It waits for a
+settled authenticated identity and offers sign-out; account changes reset its local
+state. Passive focus/token-refresh checks preserve a still-valid mounted account;
+sign-out, failure, and account transitions remove private content. Missing,
+malformed, or unusable configuration shows a sign-in setup message
+without mounting the sign-in flow or private content. The app still builds/runs
+without outputs and never simulates authenticated cloud access.
+
+The signed-in dashboard displays identity status and local audio preview. Private
+cloud cassette persistence and cloud audio authorization remain unconnected. Test real verification/reset email delivery,
+session reload, sign-out, and account switching after shared Cognito provisioning.
+
+The retained Express `/api/items` example has no authentication or per-user ownership
+and is **disabled by default**. For local examples only, set both `NODE_ENV=development`
+and `ENABLE_LEGACY_EXAMPLES=true` in `backend/.env` (the dev script does not set
+`NODE_ENV` for you). Leave `ITEMS_TABLE` blank for the in-memory store. Never put
+private cassette data in this example or publish the SAM scaffold alongside Amplify.
+
+All example methods/subpaths return 404 unless that exact local opt-in is active.
+Production/unset modes and AWS execution markers deny it even with the flag enabled;
+the Lambda entry point always disables examples independently of environment values.
+An unsafe opt-in is ignored rather than stopping the server, so `/api/health` stays
+public and available. This retires the public example API; it does not implement
+private cassette authorization, which requires a separately reviewed lab-compatible backend.
 
 ### 5. Run the app
 
@@ -136,17 +182,24 @@ npm run dev
 
 ---
 
-## Project Setup (already done — for reference)
+## Local checks
 
 ```bash
-npm create vite@latest runman -- --template react
-cd runman
-npm create amplify@latest
-npm install aws-amplify @aws-amplify/ui-react
-npm install @dnd-kit/core
-npm install konva react-konva
-npm install howler        # optional
+npm run typecheck             # all workspaces plus Amplify definitions
+npm run typecheck:amplify     # infrastructure definitions only; no AWS deployment
+npm run build                # retained Lambda bundle plus frontend
+npm run test:auth            # configuration and private-render boundary tests
+npm run test:legacy-api      # example exposure, local memory CRUD, and Lambda guard
 ```
+
+Use Node.js **24 LTS** for development and optional CI. The legacy Gen 2 CLI has a
+Node 25 incompatibility, but that CLI is not used for this standalone user-pool
+path. Legacy definitions remain typechecked without deployment. Focused
+tests use Node's test runner through the installed `tsx` tooling and server rendering;
+they verify configuration failure and private-content boundaries, not live Cognito
+flows, browser interactions, or backend authorization.
+Legacy API tests run isolated local HTTP servers and invoke the exported Lambda
+handler with API Gateway events, using sanitized environments and no AWS requests.
 
 ---
 
@@ -209,11 +262,9 @@ Location: Science and Technology Building, BYU-Idaho
 - [Freesound API docs](https://freesound.org/docs/api/) (sound effects)
 
 ### AWS
-- [AWS Amplify Gen 2 docs (React)](https://docs.amplify.aws/react/)
-- [Amplify Data (DynamoDB)](https://docs.amplify.aws/react/build-a-backend/data/)
-- [Amplify Storage (S3)](https://docs.amplify.aws/react/build-a-backend/storage/)
-- [Amplify Auth (Cognito)](https://docs.amplify.aws/react/build-a-backend/auth/)
-- [Amplify Hosting](https://docs.amplify.aws/react/deploy-and-host/)
+- [Cognito browser app clients](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-settings-client-apps.html)
+- [Cognito email verification/recovery delivery](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-email.html)
+- [Amplify UI reference (retained tooling)](https://ui.docs.amplify.aws/react/connected-components/authenticator)
 - [AWS Budgets](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-managing-costs.html) (set an alert to protect credits)
 
 ---

@@ -4,7 +4,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import type { Cassette, SideLook, Sticker, StickerKind, TapeSide } from '@runman/shared';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Cassette3D } from '@/components/cassette/Cassette3D';
+import { CassetteFace } from '@/components/cassette/CassetteFace';
 import { ColorPicker } from '@/components/cassette/ColorPicker';
 import { FlippableFace } from '@/components/cassette/FlippableFace';
 import { StickerIcon } from '@/components/cassette/StickerIcon';
@@ -17,8 +19,9 @@ import {
   SHELL_TYPES,
   STICKER_COLORS,
   STICKER_KINDS,
+  stickerLabel,
 } from '@/components/cassette/constants';
-import { patchSide, sideBHasOwnStyle, sideLook } from '@/components/cassette/sides';
+import { faceFor, patchSide, sideBHasOwnStyle, sideLook } from '@/components/cassette/sides';
 import { cassetteStore, newId, useCassette } from '@/hooks/useCassettes';
 import { useOrbit } from '@/hooks/useOrbit';
 import './editor.css';
@@ -34,7 +37,7 @@ export function EditCassettePage() {
         <div className="editor-missing">
           <h1>Tape not found</h1>
           <p className="studio-muted">It may have been deleted.</p>
-          <Link to="/" className="studio-btn primary">
+          <Link to="/library" className="studio-btn primary">
             Back to library
           </Link>
         </div>
@@ -42,7 +45,7 @@ export function EditCassettePage() {
     );
   }
 
-  return <Editor cassette={cassette} onDone={() => navigate('/')} />;
+  return <Editor cassette={cassette} onDone={() => navigate('/library')} />;
 }
 
 function Swatches({
@@ -91,6 +94,8 @@ function Swatches({
 function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [side, setSide] = useState<TapeSide>('A');
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const cancelDelete = useCallback(() => setConfirmingDelete(false), []);
   const [stickerColor, setStickerColor] = useState(STICKER_COLORS[0]);
   const orbit = useOrbit({ x: -10, y: 25 });
   const faceRef = useRef<HTMLDivElement>(null);
@@ -125,12 +130,12 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
     setSelectedId(null);
   };
 
-  const addSticker = (kind: StickerKind) => {
+  const addSticker = (kind: StickerKind, at?: { x: number; y: number }) => {
     const s: Sticker = {
       id: newId(),
       kind,
-      x: 20 + Math.random() * 60,
-      y: 25 + Math.random() * 30,
+      x: at ? Math.min(100, Math.max(0, at.x)) : 20 + Math.random() * 60,
+      y: at ? Math.min(100, Math.max(0, at.y)) : 25 + Math.random() * 30,
       rotation: Math.round(Math.random() * 40 - 20),
       scale: 1,
       color: stickerColor,
@@ -143,6 +148,46 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
     const r = faceRef.current!.getBoundingClientRect();
     return { x: ((clientX - r.left) / r.width) * 100, y: ((clientY - r.top) / r.height) * 100 };
   };
+
+  // ---- Drag a sticker from the tray onto the tape (a plain click still adds it at random) ----
+  const trayDrag = useRef<{ kind: StickerKind; startX: number; startY: number; pointerId: number; dragging: boolean } | null>(
+    null,
+  );
+  const suppressTrayClick = useRef(false);
+  const [ghost, setGhost] = useState<{ kind: StickerKind; x: number; y: number; over: boolean } | null>(null);
+
+  const overFace = (x: number, y: number) => {
+    const r = faceRef.current?.getBoundingClientRect();
+    return !!r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  };
+
+  const onTrayDown = (e: React.PointerEvent<HTMLButtonElement>, kind: StickerKind) => {
+    if (e.button !== 0) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    trayDrag.current = { kind, startX: e.clientX, startY: e.clientY, pointerId: e.pointerId, dragging: false };
+  };
+
+  const onTrayMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const d = trayDrag.current;
+    if (!d || d.pointerId !== e.pointerId) return;
+    if (!d.dragging && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < 6) return;
+    d.dragging = true;
+    setGhost({ kind: d.kind, x: e.clientX, y: e.clientY, over: overFace(e.clientX, e.clientY) });
+  };
+
+  const endTrayDrag = (e: React.PointerEvent<HTMLButtonElement>, drop: boolean) => {
+    const d = trayDrag.current;
+    if (!d || d.pointerId !== e.pointerId) return;
+    trayDrag.current = null;
+    if (!d.dragging) return; // a plain click: onClick adds it
+    setGhost(null);
+    // The browser may still fire a click for this press; ignore that one.
+    suppressTrayClick.current = true;
+    window.setTimeout(() => (suppressTrayClick.current = false), 0);
+    if (drop && overFace(e.clientX, e.clientY)) addSticker(d.kind, facePercent(e.clientX, e.clientY));
+  };
+
+  const ghostSize = ghost?.over && faceRef.current ? faceRef.current.getBoundingClientRect().width * 0.14 : 56;
 
   const onStickerPointerDown = (e: React.PointerEvent, s: Sticker) => {
     e.preventDefault();
@@ -196,21 +241,21 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
   }, [selectedId]);
 
   const deleteCassette = () => {
-    if (window.confirm(`Delete "${cassette.name}"? This can't be undone.`)) {
-      cassetteStore.remove(cassette.id);
-      onDone();
-    }
+    // Leave the page first so it never flashes "Tape not found".
+    const id = cassette.id;
+    onDone();
+    cassetteStore.remove(id);
   };
 
   return (
-    <div className="studio editor">
+    <div className="studio editor workbench">
       <div className="editor-top">
-        <Link to="/" className="studio-btn">
+        <Link to="/library" className="studio-btn">
           ← Library
         </Link>
         <span className="studio-muted editor-saved">Changes save automatically</span>
         <div className="row">
-          <button type="button" className="studio-btn danger" onClick={deleteCassette}>
+          <button type="button" className="studio-btn danger" onClick={() => setConfirmingDelete(true)}>
             Delete
           </button>
           <button type="button" className="studio-btn primary" onClick={onDone}>
@@ -284,20 +329,34 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
               </div>
             </div>
             {side === 'B' && (
-              <p className="side-block-note studio-muted">
-                {sideBHasOwnStyle(cassette)
-                  ? 'Side B has its own label style.'
-                  : 'Side B copies side A until you change it.'}
-                {sideBHasOwnStyle(cassette) && (
+              sideBHasOwnStyle(cassette) ? (
+                <div className="sync-card">
+                  <div className="sync-text">
+                    <strong>Side B has its own style</strong>
+                    <span>Copy side A's label colour, ink and pen. Stickers stay.</span>
+                  </div>
                   <button
                     type="button"
-                    className="link-btn"
+                    className="sync-btn"
                     onClick={() => update({ sideB: { stickers: cassette.sideB?.stickers } })}
                   >
-                    Match side A
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M4 9a8 8 0 0 1 14-3l2 2M20 4v4h-4M20 15a8 8 0 0 1-14 3l-2-2M4 20v-4h4" />
+                    </svg>
+                    Sync with side A
                   </button>
-                )}
-              </p>
+                </div>
+              ) : (
+                <div className="sync-card synced">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M5 12.5l4.5 4.5L19 7.5" />
+                  </svg>
+                  <div className="sync-text">
+                    <strong>Synced with side A</strong>
+                    <span>Change any colour or pen below to give side B its own look.</span>
+                  </div>
+                </div>
+              )
             )}
 
             <div className="field-row">
@@ -339,15 +398,23 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
             </div>
 
             <div className="field">
-              <span className="field-label">Doodle stickers · click to add to side {side}, drag on the tape to place</span>
+              <span className="field-label">Stickers · click or drag onto side {side}</span>
               <div className="sticker-tray">
                 {STICKER_KINDS.map((k) => (
                   <button
                     key={k}
                     type="button"
                     className="sticker-btn"
-                    onClick={() => addSticker(k)}
-                    aria-label={`Add ${k} sticker`}
+                    onClick={() => {
+                      if (suppressTrayClick.current) return;
+                      addSticker(k);
+                    }}
+                    onPointerDown={(e) => onTrayDown(e, k)}
+                    onPointerMove={onTrayMove}
+                    onPointerUp={(e) => endTrayDrag(e, true)}
+                    onPointerCancel={(e) => endTrayDrag(e, false)}
+                    aria-label={`Add ${stickerLabel(k)} sticker`}
+                    title={stickerLabel(k)}
                   >
                     <StickerIcon kind={k} color={stickerColor} />
                   </button>
@@ -392,7 +459,7 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
             </span>
           </div>
 
-          <div className="preview-frame" onPointerDown={() => setSelectedId(null)}>
+          <div className={`preview-frame${ghost?.over ? ' drop-target' : ''}`} onPointerDown={() => setSelectedId(null)}>
             <div className="preview-face">
               <FlippableFace
                 cassette={cassette}
@@ -445,11 +512,38 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: () => void }
             <span className="studio-muted">Drag to spin</span>
           </div>
         </section>
-      </div>
 
-      <div className="editor-tracks">
+        {/* ---------------- Tracklist (right pane) ---------------- */}
         <TrackList cassette={cassette} side={side} onSideChange={setSide} onChange={(tracks) => update({ tracks })} />
       </div>
+
+      {ghost && (
+        <div
+          className={`sticker-ghost${ghost.over ? ' over' : ''}`}
+          style={{ left: ghost.x, top: ghost.y, width: ghostSize, height: ghostSize }}
+          aria-hidden="true"
+        >
+          <StickerIcon kind={ghost.kind} color={stickerColor} />
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        danger
+        title="Toss this tape?"
+        message={
+          <>
+            <strong>{cassette.name || 'Untitled'}</strong> and its tracklist will be deleted from your library. This
+            can't be undone.
+          </>
+        }
+        confirmLabel="Delete tape"
+        cancelLabel="Keep it"
+        onConfirm={deleteCassette}
+        onCancel={cancelDelete}
+      >
+        <CassetteFace cassette={faceFor(cassette, 'A')} width={200} />
+      </ConfirmDialog>
     </div>
   );
 }

@@ -5,7 +5,9 @@
 // own the state and pass it in: handle `onControl`, then drive `spinning`, `latched`, `display`.
 // `side` + the FLIP key already work: the page flips the side and the tape animates over.
 
+import { useEffect, useState } from 'react';
 import type { Cassette, TapeSide } from '@runman/shared';
+import { isSfxMuted, playSfx, preloadSfx, setSfxMuted } from '@/audio/sfx';
 import { FlippableFace } from './FlippableFace';
 import './walkman.css';
 
@@ -65,6 +67,14 @@ export function CassettePlayer({
   slotRef,
 }: CassettePlayerProps) {
   const text = display ?? (loaded ? `${loaded.name} · SIDE ${side}` : 'EJECTED / IDLE');
+  const [muted, setMuted] = useState(isSfxMuted);
+
+  useEffect(() => preloadSfx(), []);
+
+  const toggleMute = () => {
+    setSfxMuted(!muted);
+    setMuted(!muted);
+  };
 
   return (
     <div className="walkman-wrap">
@@ -77,7 +87,12 @@ export function CassettePlayer({
               key={k.id}
               type="button"
               className={`wm-key wm-key-${k.id}${latched.includes(k.id) ? ' latched' : ''}`}
-              onClick={() => onControl?.(k.id)}
+              onClick={() => {
+                if (k.id === 'flip') playSfx('flip');
+                onControl?.(k.id);
+              }}
+              onPointerDown={() => loaded && playSfx('keyPress')}
+              onPointerUp={() => loaded && playSfx('keyRelease')}
               disabled={!loaded}
               aria-label={k.label}
             >
@@ -101,6 +116,19 @@ export function CassettePlayer({
               <strong>RUNMAN</strong>
               <small>STEREO CASSETTE PLAYER</small>
             </div>
+            <button
+              type="button"
+              className={`wm-mute${muted ? ' muted' : ''}`}
+              onClick={toggleMute}
+              aria-label={muted ? 'Turn button sounds on' : 'Turn button sounds off'}
+              aria-pressed={muted}
+              title={muted ? 'Sounds off' : 'Sounds on'}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 9h4l5-4v14l-5-4H4z" />
+                {muted ? <path d="M17 9l5 5M22 9l-5 5" /> : <path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" />}
+              </svg>
+            </button>
             <div className={`wm-side${loaded ? '' : ' off'}`} aria-label={`Side ${side}`}>
               <span className={side === 'A' ? 'on' : ''}>A</span>
               <span className={side === 'B' ? 'on' : ''}>B</span>
@@ -120,7 +148,10 @@ export function CassettePlayer({
             <button
               type="button"
               className="wm-eject"
-              onClick={() => onControl?.('eject')}
+              onClick={() => {
+                playSfx('eject');
+                onControl?.('eject');
+              }}
               disabled={!loaded}
               aria-label="Eject"
             >
