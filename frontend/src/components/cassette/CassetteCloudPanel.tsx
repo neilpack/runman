@@ -30,6 +30,7 @@ export function CassetteCloudPanel({ onCreate }: { onCreate: () => void }) {
       </div>
       {sync.listError && <p role="alert">{sync.listError} Your local drafts are still available.</p>}
       {sync.storageError && <p role="alert">{sync.storageError}</p>}
+      {sync.nextCursor && <p>Search, filters, and sorting cover loaded tapes. Load more to include the rest of your saved library.</p>}
       {sync.status === 'authenticated' && !sync.loading && cassettes.length === 0 && (
         <p>No tapes on this device yet. <button type="button" className="studio-btn" onClick={onCreate}>Create a tape</button></p>
       )}

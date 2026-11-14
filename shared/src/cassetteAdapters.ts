@@ -21,19 +21,24 @@ function publicLicense(value: string | undefined): string | undefined {
 /** Pure local adapter only; it neither uploads audio nor proves object ownership. */
 export function cassetteToSaveRequest(cassette: Cassette, expectedRevision: number, references: CassetteAudioReferences = {}): CassetteValidationResult<SaveCassetteRequest> {
   const issues: CassetteValidationIssue[] = [];
-  const trackFields = ['id', 'sourceId', 'title', 'artist', 'durationSec', 'side', 'source', 'audioUrl', 'artworkUrl', 'licenseUrl'];
+  const trackFields = ['id', 'sourceId', 'title', 'artist', 'durationSec', 'side', 'source', 'audioUrl', 'audioReference', 'artworkUrl', 'licenseUrl'];
   try {
     const { createdAt: _createdAt, updatedAt: _updatedAt, tracks, sideB, ...look } = cassette;
     const persisted = tracks.map((track, index) => {
       for (const key of Object.keys(track)) if (!trackFields.includes(key)) issues.push({ path: `cassette.tracks[${index}].${key}`, message: 'Unknown UI track field.' });
-      const { source, audioUrl, ...details } = track;
+      const { source, audioUrl, audioReference, ...details } = track;
       if (details.licenseUrl !== undefined) details.licenseUrl = publicLicense(details.licenseUrl);
-      if (source === 'library') return defined({ ...details, source, provider: 'jamendo', ...(audioUrl !== undefined ? { audioUrl } : {}) });
+      if (source === 'library') {
+        if (audioReference !== undefined) issues.push({ path: `cassette.tracks[${index}].audioReference`, message: 'Library tracks cannot include private audio references.' });
+        return defined({ ...details, source, provider: 'jamendo', ...(audioUrl !== undefined ? { audioUrl } : {}) });
+      }
       const sideReferences = (track.side === 'A' || track.side === 'B') && Object.hasOwn(references, track.side) ? references[track.side] : undefined;
-      const audio = sideReferences && Object.hasOwn(sideReferences, track.id) ? sideReferences[track.id] : undefined;
-      if (source !== 'recording') issues.push({ path: `cassette.tracks[${index}].source`, message: 'Unknown UI track source.' });
-      if (!audio) issues.push({ path: `cassette.tracks[${index}].audio`, message: 'Upload this recording first and supply its durable audio reference; local, blob, or public-looking playback URLs are not enough.' });
-      return defined({ ...details, source: audio?.source ?? 'recording', provider: 's3', audio });
+      const audio = audioReference ?? (sideReferences && Object.hasOwn(sideReferences, track.id) ? sideReferences[track.id] : undefined);
+      if (source !== 'recording' && source !== 'upload') issues.push({ path: `cassette.tracks[${index}].source`, message: 'Unknown UI track source.' });
+      if (!audio) issues.push({ path: `cassette.tracks[${index}].audio`, message: 'Upload this audio first and supply its durable audio reference; local, blob, or public-looking playback URLs are not enough.' });
+      // Earlier UI versions represented uploads as recording + a separate map.
+      const persistedSource = audioReference === undefined && source === 'recording' ? audio?.source ?? source : source;
+      return defined({ ...details, source: persistedSource, provider: 's3', audio });
     });
     if (issues.length) return { ok: false, issues };
     // JSON optional fields remain absent; sideB={} is deliberately kept distinct.
@@ -57,7 +62,7 @@ export function cassetteFromDocument(document: CassetteDocument): CassetteValida
     if (track.source === 'library') { const { provider: _provider, ...ui } = track; return ui; }
     const { provider: _provider, source: _source, audio, ...ui } = track;
     references[track.side][track.id] = audio;
-    return { ...ui, source: 'recording' };
+    return { ...ui, source: track.source, audioReference: audio };
   });
   const { tracks: _tracks, ...look }: CassettePayload = payload;
   return { ok: true, value: { cassette: { ...look, tracks, createdAt, updatedAt }, audioReferences: references } };

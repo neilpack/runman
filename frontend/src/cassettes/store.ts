@@ -40,7 +40,10 @@ function localCassette(value: unknown): value is Cassette {
   if (!stickers(value.stickers) || !Array.isArray(value.tracks) || !value.tracks.every((track: unknown) => record(track) &&
     ['id', 'title', 'artist'].every((key) => typeof track[key] === 'string') &&
     typeof track.durationSec === 'number' && Number.isFinite(track.durationSec) &&
-    ['A', 'B'].includes(String(track.side)) && ['library', 'recording'].includes(String(track.source)) &&
+    ['A', 'B'].includes(String(track.side)) && ['library', 'upload', 'recording'].includes(String(track.source)) &&
+    (track.audioReference === undefined || (record(track.audioReference) && track.audioReference.source === track.source &&
+      typeof track.audioReference.objectKey === 'string' && typeof track.audioReference.contentType === 'string' &&
+      typeof track.audioReference.sizeBytes === 'number' && Number.isSafeInteger(track.audioReference.sizeBytes) && track.audioReference.sizeBytes > 0)) &&
     ['sourceId', 'audioUrl', 'artworkUrl', 'licenseUrl'].every((key) => track[key] === undefined || typeof track[key] === 'string'))) return false;
   if (value.sideB !== undefined) {
     if (!record(value.sideB)) return false;

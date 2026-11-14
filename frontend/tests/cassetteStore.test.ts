@@ -35,6 +35,25 @@ function harness(overrides: Partial<CassetteApi> = {}, disk = new Map<string, st
   return { store, disk, api, quota: (value: boolean) => { quota = value; } };
 }
 
+test('merged upload UI tracks and references remain local when private-audio API saving is refused', async () => {
+  const { store } = harness({ save: async (_owner, input) => {
+    assert.equal(input.cassette.tracks[0]!.source, 'upload');
+    assert.equal(Object.hasOwn(input.cassette.tracks[0]!, 'audioReference'), false);
+    throw new CassetteApiError(422, 'Private audio saving is not connected.');
+  } });
+  store.setSession('authenticated', 'alice'); await tick();
+  const local = store.create();
+  const upload = { id: 'uploaded', source: 'upload' as const, title: 'My upload', artist: '', durationSec: 10, side: 'A' as const,
+    audioReference: { source: 'upload' as const, objectKey: 'audio/example/file.mp3', contentType: 'audio/mpeg', sizeBytes: 500 } };
+  store.update(local.id, { tracks: [upload] });
+  assert.deepEqual(store.get(local.id)?.tracks, [upload]);
+  assert.equal(await store.save(local.id), false);
+  assert.equal(store.getSync().tapes[local.id].revision, 0);
+  assert.match(store.getSync().tapes[local.id].error!, /Private audio/);
+  store.setSession('guest'); store.setSession('authenticated', 'alice'); await tick();
+  assert.deepEqual(store.get(local.id)?.tracks, [upload]);
+});
+
 test('account transitions abort requests and reject stale results even after returning to the same owner', async () => {
   const pending = deferred<ListCassettesResponse>();
   let signal: AbortSignal | undefined;

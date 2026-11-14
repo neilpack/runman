@@ -95,7 +95,8 @@ test('uploaded/recorded references survive UI adapters while transient playback 
     assert.equal(saved.cassette.tracks[0]!.source, source);
     assert.equal('audioUrl' in saved.cassette.tracks[0]!, false);
     const restored = ok(cassetteFromDocument(document(saved.cassette)));
-    assert.equal(restored.cassette.tracks[0]!.source, 'recording');
+    assert.equal(restored.cassette.tracks[0]!.source, source);
+    assert.deepEqual(restored.cassette.tracks[0]!.audioReference, refs.B['track-b']);
     assert.equal(restored.cassette.tracks[0]!.audioUrl, undefined);
     assert.deepEqual(restored.audioReferences.B?.['track-b'], refs.B['track-b']);
     assert.deepEqual(ok(cassetteToSaveRequest(restored.cassette, 1, restored.audioReferences)), saved);
@@ -114,6 +115,22 @@ test('reference dictionaries are prototype-safe for constructor and __proto__ tr
     assert.ok(Object.hasOwn(restored.audioReferences.B!, id));
     assert.deepEqual(restored.audioReferences.B![id], reference);
   }
+});
+
+test('current UI upload references round-trip without duplicating wire fields or weakening source validation', () => {
+  const local = tape();
+  local.tracks[0] = { ...local.tracks[0]!, source: 'upload', audioReference: { ...reference, source: 'upload' } };
+  const saved = ok(cassetteToSaveRequest(local, 0));
+  assert.equal(saved.cassette.tracks[0]!.source, 'upload');
+  assert.equal(Object.hasOwn(saved.cassette.tracks[0]!, 'audioReference'), false);
+  const restored = ok(cassetteFromDocument(document(saved.cassette)));
+  assert.equal(restored.cassette.tracks[0]!.source, 'upload');
+  assert.deepEqual(restored.cassette.tracks[0]!.audioReference, local.tracks[0]!.audioReference);
+  assert.deepEqual(ok(cassetteToSaveRequest(restored.cassette, 0)), saved);
+  local.tracks[0]!.audioReference!.source = 'recording';
+  invalid(cassetteToSaveRequest(local, 0), 'audio.source');
+  local.tracks[0]!.source = 'library';
+  invalid(cassetteToSaveRequest(local, 0), 'audioReference');
 });
 
 test('unknown/server-owned input fields and inline blobs/SVG descriptors are rejected', () => {

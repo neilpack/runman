@@ -4,7 +4,8 @@
 Privately save and restore the complete cassette look and ordered track metadata
 for the signed-in owner. Steps 1 and 2 define and implement the authenticated API;
 step 3 connects frontend Save/Load with account-scoped drafts. AWS resources are
-created manually by the user. Existing UI `Cassette`/`Track` types remain unchanged.
+created manually by the user. The current UI supports library, uploaded, and
+recorded tracks; local drafts preserve inline `audioReference` metadata.
 The user will create the table using [the console guide](DATABASE_CONSOLE_SETUP.md);
 agents must not create or modify AWS resources for this checkpoint.
 
@@ -36,8 +37,9 @@ errors and remain local; no tracks are silently dropped.
 
 Uploads/recordings use provider `s3` and the existing `StoredAudioReference` shape;
 never persist blobs, data URLs, local previews, or temporary playback URLs. The
-adapter returns references separately when restoring legacy `source: recording`
-UI tracks. **Shape validation proves neither ownership nor object existence.**
+adapter restores the current upload/recording source and inline audio reference,
+and retains a separate reference map for older callers. Legacy recording-plus-map
+uploads remain supported. **Shape validation proves neither ownership nor object existence.**
 Step 2 must refuse private-audio references until server-side audio authorization
 and existence checks integrate; owning the cassette cannot authorize a foreign
 object key. No identity-pool key prefix is assumed by this schema.
@@ -83,7 +85,7 @@ object key. No identity-pool key prefix is assumed by this schema.
    local drafts. Edits persist locally; only explicit Save sends them to the API.
    Offer explicit selection/import for old local drafts into the signed-in account,
    retain originals, and never silently claim/import them as cloud-owned.
-4. **Next approval:** LabRole-only API deployment preparation. The user creates
+4. **Complete locally:** LabRole-only API deployment preparation. The user creates
    the database themselves using `DATABASE_CONSOLE_SETUP.md`; agents do not provision it.
 5. **Next approval:** user-run provisioning and live two-account isolation, conflicts,
    pagination, save/reload, and safe audio-reference rejection/integration.
@@ -137,5 +139,23 @@ frontend saves reach DynamoDB. A successful local build does not prove the live
 backend/table connection. Memory mode remains ephemeral development storage.
 Recorded/uploaded tracks remain local until audio authorization integrates; no
 tracks are silently omitted to make a tape saveable. No AWS resources have been
-created or changed by agents. Stop after step 3 checks and wait for approval of
-deployment preparation; never provision resources on the user's behalf.
+created or changed by agents.
+
+Step 4 is prepared in [BACKEND_DEPLOYMENT.md](BACKEND_DEPLOYMENT.md). Run
+`npm run test:deployment` and `npm run package:backend` to create an ignored ZIP
+with only root `lambda.mjs`, a SHA-256 manifest, and offline uploaded-handler smoke
+verification. Handler is `lambda.handler`, runtime `nodejs22.x`; manual console
+deployment uses existing LabRole and explicit HTTP API 2.0 routes. Runtime supplies
+AWS_REGION and role credentials; never paste temporary keys into Lambda or frontend.
+The old SAM template remains undeployed reference. User-owned provisioning and live
+two-account validation are checkpoint 5, not part of this preparation.
+
+Merged origin/main through `b1db48b` (including account, filters and uploaded-track
+UI). Compatibility fixes preserve uploaded/recorded draft tracks and matching
+sources while keeping private-audio API saves blocked pending authorization.
+Favorite selection and library filters reflect pagination rather than claiming
+the loaded page is the whole library. Latest verification: 127 tests across
+schema (18), cassette API (16), frontend (22), auth (30), audio (19), account (9),
+legacy API (10), packaging (3); root typecheck/build and offline ZIP smoke passed.
+An independent ZIP reader verified the one-entry archive and both SHA-256 hashes.
+No live AWS tests were run; local Node smoke does not prove Lambda runtime/IAM access.

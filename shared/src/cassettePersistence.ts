@@ -1,6 +1,6 @@
 import type { Cassette, StoredAudioReference, TapeSide, Track } from './index.js';
 
-interface PersistedTrackDetails extends Omit<Track, 'source' | 'audioUrl'> {}
+interface PersistedTrackDetails extends Omit<Track, 'source' | 'audioUrl' | 'audioReference'> {}
 export type PersistedCassetteTrack =
   | (PersistedTrackDetails & { source: 'library'; provider: 'jamendo'; sourceId: string; audioUrl?: string })
   | (PersistedTrackDetails & { source: 'upload' | 'recording'; provider: 's3'; audio: StoredAudioReference });
@@ -33,7 +33,7 @@ export interface ListCassettesRequest { limit?: number; cursor?: string }
 export interface ListCassettesResponse { items: CassetteDocument[]; nextCursor?: string }
 export interface DeleteCassetteResponse { id: string; deletedRevision: number }
 
-/** UI uses recording for both uploaded and recorded audio. Keep durable refs separately. */
+/** Legacy callers can supply durable references separately from the UI track. */
 export type CassetteAudioReferences = Partial<Record<TapeSide, Record<string, StoredAudioReference>>>;
 export interface RestoredCassette { cassette: Cassette; audioReferences: CassetteAudioReferences }
 
