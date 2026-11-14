@@ -8,15 +8,20 @@ import { itemsRouter } from './routes/items.js';
 import { musicRouter } from './routes/music.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 
-export function createApp() {
+export function createApp({ disableLegacyExamples = false }: { disableLegacyExamples?: boolean } = {}) {
   const app = express();
+  const allowLegacyExamples = config.legacyExamplesEnabled && !disableLegacyExamples;
+
+  // Deny before CORS preflight and body parsing so every disabled example method
+  // returns 404, including OPTIONS and malformed JSON requests.
+  if (!allowLegacyExamples) app.use('/api/items', notFound);
 
   app.use(cors({ origin: config.corsOrigins }));
   app.use(express.json());
 
   // Register routes here. All API routes live under /api.
   app.use('/api/health', healthRouter);
-  app.use('/api/items', itemsRouter);
+  if (allowLegacyExamples) app.use('/api/items', itemsRouter);
   app.use('/api/music', musicRouter);
 
   app.use(notFound);

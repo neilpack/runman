@@ -1,6 +1,14 @@
 // Types shared between the frontend and backend.
 // Put API request/response shapes here so both sides stay in sync.
 
+/** Persist only after upload succeeds. Playback URLs are temporary browser state. */
+export interface StoredAudioReference {
+  source: 'upload' | 'recording';
+  objectKey: string;
+  contentType: string;
+  sizeBytes: number;
+}
+
 export interface HealthResponse {
   status: 'ok';
   service: string;

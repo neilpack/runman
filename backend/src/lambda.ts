@@ -2,4 +2,6 @@
 import serverless from 'serverless-http';
 import { createApp } from './app.js';
 
-export const handler = serverless(createApp());
+// Defense in depth: this entry point never exposes local examples, even if its
+// environment is mistakenly marked development and Lambda markers are absent.
+export const handler = serverless(createApp({ disableLegacyExamples: true }));
