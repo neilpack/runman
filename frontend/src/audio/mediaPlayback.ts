@@ -21,9 +21,11 @@ export function playAudioSource(audio: PlaybackElement, url: string, position: n
     let settled = false;
     let playing = false;
     let positioned = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     function finish(error?: unknown) {
       if (settled) return;
       settled = true;
+      clearTimeout(timer);
       signal.removeEventListener('abort', abort);
       audio.removeEventListener('loadedmetadata', metadata);
       audio.removeEventListener('error', failed);
@@ -41,6 +43,7 @@ export function playAudioSource(audio: PlaybackElement, url: string, position: n
     signal.addEventListener('abort', abort, { once: true });
     audio.addEventListener('loadedmetadata', metadata);
     audio.addEventListener('error', failed);
+    timer = setTimeout(() => finish(new DOMException('Audio metadata or playback did not become ready.', 'TimeoutError')), 20_000);
     try {
       // A same-track cache hit does not prove the reusable HTMLAudioElement still
       // has a healthy source (ejection/load failures can clear or poison it).
@@ -60,6 +63,7 @@ export function playAudioSource(audio: PlaybackElement, url: string, position: n
 
 /** Safe, actionable LCD text. Never show raw SDK/browser errors containing bearer URLs. */
 export function playbackFailureMessage(error: unknown): string {
+  if (error instanceof DOMException && error.name === 'TimeoutError') return 'AUDIO LOAD TIMED OUT';
   if (error instanceof DOMException && error.name === 'NotAllowedError') return 'PRESS PLAY TO ALLOW AUDIO';
   if (error instanceof MediaPlaybackError) {
     if (error.code === 2) return 'AUDIO NETWORK ERROR';

@@ -1,0 +1,20 @@
+.playback-diagnostics {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 150;
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100vh - 100px);
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--studio-accent);
+  border-radius: 12px;
+  background: var(--studio-panel);
+  color: var(--studio-text);
+  box-shadow: 0 8px 24px var(--studio-bg);
+  font-size: 0.85rem;
+}
+.playback-diagnostics p { margin: 0 0 10px; }
+.playback-diagnostics pre { white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; font-size: 0.75rem; }
+.playback-diagnostics summary { cursor: pointer; }
+.playback-diagnostics > div { display: flex; flex-wrap: wrap; gap: 8px; }

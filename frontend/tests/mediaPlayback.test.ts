@@ -106,3 +106,12 @@ test('failure messages distinguish policy, network, decoding and authorization w
   assert.equal(playbackFailureMessage({ status: 401, message: 'secret' }), 'SIGN IN TO PLAY AUDIO');
   assert.equal(playbackFailureMessage({ status: 503 }), 'AUDIO SERVICE UNAVAILABLE');
 });
+
+test('loading times out with a classified error instead of remaining pending forever', async (context) => {
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  const media = new Media(); media.playResult = () => new Promise(() => {});
+  const result = playAudioSource(media, 'https://audio.test/never-ready', 0, signal());
+  const rejected = assert.rejects(result, { name: 'TimeoutError' });
+  context.mock.timers.tick(20_000);
+  await rejected;
+});
