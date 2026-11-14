@@ -42,9 +42,9 @@
 
 .welcome-nav-link,
 .welcome-login {
-  font-family: var(--font-nav);
+  font-family: var(--font);
   font-size: 0.78rem;
-  font-weight: 500;
+  font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   text-decoration: none;
@@ -58,16 +58,17 @@
 }
 
 .welcome-nav-link:hover {
-  border-color: var(--brand-background);
+  border-color: var(--brand-accent);
 }
 
 .welcome-brand {
-  font-family: var(--font-nav);
-  font-size: 1.55rem;
-  font-weight: 500;
-  letter-spacing: 0.3em;
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  font-weight: 400;
+  font-synthesis: none;
+  letter-spacing: 0.12em;
   /* letter-spacing adds trailing space after the last letter; offset it so the word stays centered */
-  margin-right: -0.3em;
+  margin-right: -0.12em;
   text-decoration: none;
   color: #fff;
 }
@@ -85,8 +86,8 @@
 }
 
 .welcome-login:hover {
-  background: var(--brand-background);
-  color: var(--brand-primary-deep);
+  background: var(--brand-accent);
+  border-color: var(--brand-accent);
 }
 
 /* Hero */
@@ -105,11 +106,12 @@
 
 .welcome-title {
   margin: 0 0 var(--space-6);
-  font-family: var(--font-editorial);
+  font-family: var(--font-display);
   font-size: clamp(2.6rem, 5vw, 4.25rem);
   font-weight: 400;
+  font-synthesis: none;
   line-height: 1.08;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.01em;
 }
 
 .welcome-subtitle {
@@ -123,10 +125,10 @@
   display: inline-block;
   padding: 18px 30px;
   background: var(--brand-background);
-  color: var(--brand-primary-deep);
-  font-family: var(--font-nav);
+  color: var(--brand-dark-background-light);
+  font-family: var(--font);
   font-size: 0.8rem;
-  font-weight: 600;
+  font-weight: 900;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   text-decoration: none;
@@ -151,6 +153,8 @@
   max-width: 62vw;
   object-fit: contain;
   object-position: bottom;
+  transform: translateX(-0.5in) scale(1.2);
+  transform-origin: bottom center;
   pointer-events: none;
   user-select: none;
 }
@@ -165,6 +169,11 @@
   height: 20vh;
   background: var(--brand-background);
   clip-path: polygon(0 25%, 100% 50%, 100% 100%, 0 100%);
+}
+
+/* The login / sign-up page uses grays instead of the blues */
+.login-main ~ .welcome-desk {
+  background: var(--brand-gray-light);
 }
 
 .welcome-arrow {
@@ -204,42 +213,43 @@
   flex-direction: column;
   gap: var(--space-4);
   padding: clamp(24px, 5vw, 40px);
-  background: var(--brand-background);
-  color: var(--brand-primary-deep);
+  background: var(--brand-gray-light);
+  color: var(--brand-dark-background-light);
   border-radius: 4px;
-  box-shadow: 0 18px 48px rgb(23 54 81 / 0.28);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 0.35);
 }
 
 .login-title {
   margin: 0;
-  font-family: var(--font-editorial);
+  font-family: var(--font-display);
   font-size: 2.1rem;
   font-weight: 400;
+  font-synthesis: none;
   line-height: 1.15;
 }
 
 .login-subtitle {
   margin: 0 0 var(--space-2);
-  color: var(--brand-primary-dark);
+  color: var(--brand-gray);
 }
 
 .login-field {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-family: var(--font-nav);
+  font-family: var(--font);
   font-size: 0.75rem;
-  font-weight: 500;
+  font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .login-input {
   padding: 12px 14px;
-  border: 1px solid var(--brand-secondary);
+  border: 1px solid var(--brand-gray);
   border-radius: 2px;
   background: #fff;
-  color: var(--brand-primary-deep);
+  color: var(--brand-dark-background-light);
   font: inherit;
   font-family: var(--font);
   font-size: 1rem;
@@ -248,14 +258,14 @@
 }
 
 .login-input:focus {
-  border-color: var(--brand-primary);
+  border-color: var(--brand-dark-background-light);
 }
 
 .login-notice {
   margin: 0;
   padding: 10px 12px;
   background: #fff;
-  border-left: 3px solid var(--brand-primary);
+  border-left: 3px solid var(--brand-dark-background-light);
   font-size: 0.9rem;
 }
 
@@ -264,11 +274,11 @@
   padding: 16px;
   border: none;
   border-radius: 2px;
-  background: var(--brand-primary);
+  background: var(--brand-dark-background-light);
   color: #fff;
-  font-family: var(--font-nav);
+  font-family: var(--font);
   font-size: 0.8rem;
-  font-weight: 600;
+  font-weight: 900;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   cursor: pointer;
@@ -276,7 +286,7 @@
 }
 
 .login-submit:hover {
-  background: var(--brand-primary-dark);
+  background: var(--brand-accent);
 }
 
 .login-switch {
@@ -286,57 +296,148 @@
 }
 
 .login-switch a {
-  color: var(--brand-primary-dark);
+  color: var(--brand-dark-background-light);
   font-weight: 600;
 }
 
-/* Small screens: wordmark + log in on top, links below; photo flows under the copy */
+/* ---------- Responsive breakpoints ----------
+   > 1024px  desktop: three-column header, photo pinned bottom-right
+   <= 1024px tablet landscape: smaller photo, tighter padding
+   <= 820px  tablet portrait: everything stacks top to bottom in one flex column
+   <= 600px  phone: photo hidden, copy centered
+   <= 380px  small phone: tighter type and full-width buttons */
+
+@media (max-width: 1024px) {
+  .welcome-hero {
+    padding: 0 clamp(16px, 6vw, 64px) 18vh;
+  }
+
+  .welcome-copy {
+    max-width: 420px;
+  }
+
+  .welcome-photo {
+    right: 0;
+    height: 70vh;
+    max-width: 55vw;
+    transform: scale(1.1);
+  }
+}
+
 @media (max-width: 820px) {
+  /* Header: wordmark, links, log in, stacked */
   .welcome-header {
-    grid-template-columns: 1fr auto;
-    grid-template-areas:
-      'brand login'
-      'nav nav';
-    row-gap: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-4);
     padding: 20px 16px;
   }
 
   .welcome-brand {
-    grid-area: brand;
-    font-size: 1.3rem;
-  }
-
-  .welcome-actions {
-    grid-area: login;
+    order: -1;
+    font-size: 1.5rem;
   }
 
   .welcome-nav {
-    grid-area: nav;
+    justify-content: center;
     gap: 6px 20px;
   }
 
+  .welcome-actions {
+    justify-self: auto;
+  }
+
+  /* Hero: copy, then photo, top to bottom */
   .welcome-hero {
     flex-direction: column;
-    align-items: stretch;
+    align-items: center;
+    gap: var(--space-6);
     padding: var(--space-6) 16px 0;
+    text-align: center;
+  }
+
+  .welcome-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 520px;
+  }
+
+  .welcome-subtitle {
+    max-width: 30ch;
   }
 
   .welcome-photo {
     position: relative;
     right: auto;
     bottom: auto;
-    align-self: center;
-    height: 56vh;
+    height: 50vh;
     max-width: 100%;
     margin-top: auto;
-    padding-top: var(--space-6);
+    transform: none;
   }
 
   .welcome-desk {
     height: 12vh;
   }
 
+  .login-main {
+    padding-bottom: 14vh;
+  }
+
   .welcome-arrow {
     display: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .welcome-photo {
+    display: none;
+  }
+
+  /* With the photo gone, center the copy in the remaining space */
+  .welcome-hero {
+    justify-content: center;
+    padding: var(--space-6) 16px 12vh;
+  }
+
+  .welcome-title {
+    font-size: clamp(2.2rem, 10vw, 2.8rem);
+  }
+
+  .welcome-desk {
+    height: 10vh;
+  }
+
+  .login-main {
+    align-items: start;
+    padding: var(--space-4) 16px 12vh;
+  }
+
+  .login-title {
+    font-size: 1.8rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .welcome-nav {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .welcome-cta,
+  .welcome-login {
+    width: 100%;
+    text-align: center;
+  }
+
+  .welcome-actions,
+  .welcome-copy {
+    width: 100%;
+  }
+
+  .login-card {
+    padding: 20px;
   }
 }

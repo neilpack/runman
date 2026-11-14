@@ -25,7 +25,6 @@ export function WelcomePage() {
         <img
           className="welcome-photo"
           src={ladyListening}
-          style={{ transform: 'translateX(-0.5in) scale(1.2)', transformOrigin: 'bottom center' }}
           alt="A woman in headphones dancing to music from a cassette walkman clipped to her jeans"
         />
       </main>
