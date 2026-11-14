@@ -313,6 +313,20 @@ export function createCassetteStore(deps: Dependencies) {
       } catch (error) { if (current(ticket, subject)) { failed(value, error); persist(); } return false; }
       finally { requests.delete(request); if (current(ticket, subject)) { value.deleting = false; publish(); } }
     },
+    /**
+     * Put the library in the user's own order (the drawer's "My order"). `ids` lists tapes in
+     * their new order; any tape it leaves out keeps its place after them. The order is kept with
+     * this browser's drafts for the current account. It is not part of the cassette, so it doesn't
+     * make tapes dirty and isn't saved to the cloud (another device shows the cloud's order).
+     */
+    reorder(ids: string[]) {
+      if (status === 'hidden') return;
+      const next = new Map<string, Model>();
+      for (const id of ids) { const value = models.get(id); if (value) next.set(id, value); }
+      for (const [id, value] of models) if (!next.has(id)) next.set(id, value);
+      models = next;
+      persist(); publish();
+    },
     reload: (id: string, confirmDiscard = false) => load(id, confirmDiscard, false),
     ensureLoaded: (id: string) => load(id, false, true),
     refresh: () => list(false),
