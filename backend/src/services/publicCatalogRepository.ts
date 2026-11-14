@@ -19,8 +19,8 @@ export interface PublicSongItem {
   audio: StoredAudioReference;
   artworkUrl?: string;
   /**
-   * True when the owner shared the song itself (listed on Explore). False for a song that is only
-   * there so a public tape can play it: it streams, but is left out of song lists and search.
+   * True while discoverable. False retains withdrawn audio for the owner and listeners
+   * who already added it; public song lists, search and anonymous streaming exclude it.
    */
   listed: boolean;
   addCount: number;
@@ -44,14 +44,15 @@ export interface PublicCatalogRepository {
   putSong(input: PublicSongInput, now: string): Promise<PublicSongItem>;
   /** False when there was nothing of this owner's to remove. */
   deleteSong(id: string, owner: string): Promise<boolean>;
-  /** Keeps the song streamable for public tapes but drops it from lists. False if not the owner's. */
+  /** Keeps earlier recipients' audio but drops it from lists. False if not the owner's. */
   unlistSong(id: string, owner: string, now: string): Promise<boolean>;
   putTape(input: PublicTapeInput, now: string): Promise<PublicTape>;
   deleteTape(id: string, owner: string): Promise<boolean>;
   /** Claims the username atomically (UsernameTaken). With `ifPublished`, returns undefined instead of creating. */
   putProfile(owner: string, input: PublicProfileInput, now: string, ifPublished: boolean): Promise<PublicProfileItem | undefined>;
-  /** Counts one add per listener. Returns the song's addCount, or undefined if the song is gone. */
+  /** Creates a durable grant while listed; existing grants survive withdrawal. Dedupes adds. */
   recordAdd(songId: string, listener: string): Promise<number | undefined>;
+  hasSongAccess(songId: string, listener: string): Promise<boolean>;
 }
 
 const ID = /^[a-zA-Z0-9_-]{1,128}$/;
@@ -141,8 +142,10 @@ export function createMemoryPublicCatalogRepository(): PublicCatalogRepository {
       const song = songs.get(songId);
       if (!song) return undefined;
       const key = `${songId}\n${listener}`;
+      if (!song.listed && !adds.has(key)) return undefined;
       if (!adds.has(key)) { adds.add(key); song.addCount++; }
       return song.addCount;
     },
+    async hasSongAccess(songId, listener) { return adds.has(`${songId}\n${listener}`); },
   };
 }

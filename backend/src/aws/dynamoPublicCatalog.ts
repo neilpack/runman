@@ -81,6 +81,11 @@ export function createDynamoPublicCatalogRepository(tableName: string, send: (co
     const { SK, rest } = strip(partition, output.Item);
     return decode(SK, rest);
   }
+  async function hasSongAccess(songId: string, listener: string) {
+    const key = { PK: `EXPLORE#ADD#${sk(songId)}`, SK: sk(listener) };
+    const output = await send(new GetCommand({ TableName: tableName, Key: key, ConsistentRead: true }));
+    return output.Item?.PK === key.PK && output.Item?.SK === key.SK;
+  }
   /** `ownerPath` is the attribute path holding the owner, e.g. ['ownerId'] or ['owner', 'userId']. */
   async function deleteOwned(partition: string, id: string, ownerPath: string[], owner: string) {
     const names: Record<string, string> = { '#pk': 'PK' };
@@ -212,17 +217,21 @@ export function createDynamoPublicCatalogRepository(tableName: string, send: (co
           } },
           { Update: {
             TableName: tableName, Key: key, UpdateExpression: 'ADD #addCount :one',
-            ConditionExpression: 'attribute_exists(#pk)', ExpressionAttributeNames: { '#pk': 'PK', '#addCount': 'addCount' }, ExpressionAttributeValues: { ':one': 1 },
+            ConditionExpression: 'attribute_exists(#pk) AND (attribute_not_exists(#listed) OR #listed = :true)', ExpressionAttributeNames: { '#pk': 'PK', '#addCount': 'addCount', '#listed': 'listed' }, ExpressionAttributeValues: { ':one': 1, ':true': true },
           } },
         ] }));
       } catch (error) {
         const reasons = cancellation(error);
         if (!reasons) throw error;
-        if (reasons[1] === 'ConditionalCheckFailed') return undefined;
-        if (reasons[0] !== 'ConditionalCheckFailed') throw new CatalogConflict();
-        // Already counted for this listener: report the current total.
+        // Existing grants survive withdrawal; new grants atomically require listed=true.
+        if (reasons[0] !== 'ConditionalCheckFailed') {
+          if (reasons[1] === 'ConditionalCheckFailed') return undefined;
+          throw new CatalogConflict();
+        }
+        if (!await hasSongAccess(songId, listener)) return undefined;
       }
       return (await getOne(CATALOG_PARTITIONS.song, songId, song))?.addCount;
     },
+    hasSongAccess,
   };
 }

@@ -443,9 +443,9 @@ export function createExploreService(source: ExploreSource, now: () => Date = ()
     },
 
     /** A short-lived playable URL for the song's audio, or undefined if it has none. */
-    async audioUrl(songId: string): Promise<string | undefined> {
+    async audioUrl(songId: string, includeUnlisted = false): Promise<string | undefined> {
       const { songs } = await source.snapshot();
-      const song = songs.find((s) => s.id === songId);
+      const song = songs.find((s) => s.id === songId && (includeUnlisted || !s.unlisted));
       return song?.audioKey ? source.audioUrl(song) : undefined;
     },
   };

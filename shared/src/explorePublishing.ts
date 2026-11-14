@@ -64,5 +64,7 @@ export interface PublicTapePage { tapes: PublicTape[]; total: number; offset: nu
 /** GET /api/explore/tapes/:id */
 export interface PublicTapeResponse { tape: PublicTape; catalog: ExploreCatalog }
 
-/** POST /api/explore/songs/:id/adds (signed in). Counts once per listener; feeds trending. */
+/** POST /api/explore/songs/:id/playback (signed in). Hidden songs require a prior add. */
+export interface SharedSongPlaybackResponse { url: string }
+/** POST /api/explore/songs/:id/adds (signed in). Durable playback grant; counts adds once. */
 export interface RecordSongAddResponse { addCount: number }

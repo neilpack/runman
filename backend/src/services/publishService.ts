@@ -53,14 +53,14 @@ export function createPublishService(repository: PublicCatalogRepository, option
     const tapes = (await repository.listTapes()).filter((t) => t.owner.userId === owner);
     return new Set(tapes.flatMap(songIdsOf));
   }
-  /** Deletes the owner's songs among `candidates` that no public tape of theirs uses any more. */
+  /** Withdraw unused songs without revoking earlier listeners' saved access. */
   async function dropUnusedSongs(owner: string, candidates: string[]) {
     if (!candidates.length) return;
     const used = await tapeSongIds(owner);
     for (const id of new Set(candidates)) {
       if (used.has(id)) continue;
       const song = await repository.getSong(id);
-      if (song && song.ownerId === owner) await repository.deleteSong(id, owner);
+      if (song && song.ownerId === owner) await repository.unlistSong(id, owner, clock());
     }
   }
   function cassetteId(value: string) {
@@ -91,15 +91,14 @@ export function createPublishService(repository: PublicCatalogRepository, option
       });
     },
 
-    /** Takes the song off Explore's lists. It keeps streaming only while one of your public tapes uses it. */
+    /** Takes the song off Explore's lists while preserving earlier recipients' playback. */
     async unpublishSong(owner: string, body: unknown): Promise<UnpublishResponse> {
       const { objectKey } = valid(validateUnpublishSongRequest(body));
       const id = publicSongId(owner, objectKey);
       return storage(async () => {
         const song = await repository.getSong(id);
         if (!song || song.ownerId !== owner || !song.listed) throw new HttpError(404, 'That song is not on Explore.');
-        if ((await tapeSongIds(owner)).has(id)) await repository.unlistSong(id, owner, clock());
-        else await repository.deleteSong(id, owner);
+        await repository.unlistSong(id, owner, clock());
         changed();
         return { id };
       });
@@ -108,7 +107,7 @@ export function createPublishService(repository: PublicCatalogRepository, option
     /**
      * Publishes the whole tape: its look and every track. Jamendo and Explore tracks are kept as they
      * are. The owner's own uploads/recordings become Explore songs (listed under Explore → Songs), so
-     * anyone can play them; they come down again when no public tape of the owner's uses them.
+     * anyone can play them; when withdrawn they remain playable by earlier recipients.
      * Without private audio storage those tracks can't stream, so they are left off.
      */
     async publishTape(owner: string, pathId: string, body: unknown): Promise<PublishTapeResponse> {

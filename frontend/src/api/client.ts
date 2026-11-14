@@ -7,6 +7,7 @@ import { createProfileApi } from './profileClient';
 import { createPublishApi } from './publishClient';
 import { getMediaAccount } from '@/auth/mediaContext';
 import { createListeningApi } from './listeningClient';
+import { createSharedSongApi } from './sharedSongClient';
 
 import type {
   CreateItemRequest,
@@ -56,6 +57,11 @@ function query(params: Record<string, string | number | undefined>): string {
 }
 
 export const api = {
+  sharedSongs: createSharedSongApi({ baseUrl: BASE_URL, account: getMediaAccount, async token() {
+    const access = (await fetchAuthSession()).tokens?.accessToken;
+    return access && typeof access.payload.sub === 'string' && typeof access.payload.exp === 'number'
+      ? { sub: access.payload.sub, token: access.toString(), expiresAt: access.payload.exp } : null;
+  } }),
   listening: createListeningApi({ baseUrl: BASE_URL, account: getMediaAccount, async token() {
     const access = (await fetchAuthSession()).tokens?.accessToken;
     return access && typeof access.payload.sub === 'string' && typeof access.payload.exp === 'number'

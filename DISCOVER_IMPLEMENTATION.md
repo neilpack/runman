@@ -47,6 +47,36 @@ recordings must stay out of Discover.
   Open tape; success is reported as saved only after cloud acknowledgement.
   Guest adds are explicitly local. Switching accounts closes stale pickers.
 
+## Retaining shared uploads and recordings after withdrawal
+
+- When the original owner makes their last public tape using an upload/recording
+  private, deletes it or removes that track, retain the song row with `listed:false`.
+  It leaves Discover lists/search/rankings; its S3 object and listening totals remain.
+  Another recipient making their own tape private does not change the original's
+  listing. Republishing the original audio restores its stable song ID and totals.
+- Existing `EXPLORE#ADD#<songId>` / `<verified sub>` rows now also grant lasting
+  playback. Server-side cassette saves establish these grants for community tracks,
+  including copies of public tapes; a conditional transaction requires the song
+  still be listed when a new grant is created. Repeated adds do not increment again.
+  Grants survive tape removal and failed/conflicting saves so retries keep access.
+- Hidden audio requires signed-in POST `/api/explore/songs/:id/playback`.
+  The server checks original ownership or a prior grant before issuing a fresh URL.
+  Optional `?cassetteId=<id>` supports older saves without add markers: the server
+  reads that verified account's existing tape, never trusts the incoming track list.
+  Re-saving those older references is supported. New accounts cannot add hidden
+  songs by submitting copied IDs. Anonymous GET `/songs/:id/audio` excludes hidden
+  entries, so old public URLs no longer bypass withdrawal. Already-issued S3 URLs
+  remain usable until their normal expiry; guests do not receive lasting access.
+- The signed-in Walkman obtains a fresh playback URL for saved community tracks;
+  it cancels stale responses after account changes and stores no signed URL in tapes.
+  The original owner's private uploads/recordings and Jamendo keep their existing
+  playback paths. A retained song is not a second S3 copy. This does not recover
+  catalog entries already deleted by an older deployed backend; the owner must
+  republish that original audio once to restore those references.
+- Implementation: `sharedSongAccess.ts`, the cassette save authorizer, catalog
+  repository add grants, Explore playback route and `sharedSongClient.ts`.
+  No new tables, indexes, IAM roles or environment variables.
+
 Relevant files: shared `listening.ts`; backend `listeningService.ts`,
 `listeningRepository.ts`, `dynamoListening.ts`, Explore router/source; frontend
 `listeningClient.ts`, `listeningTracker.ts`, `listeningRuntime.ts`, tape deck,
@@ -60,7 +90,8 @@ preview player, Songs/ExplorePage, `tapeAdder.ts` and AddToTapeDialog.
    `JAMENDO_CLIENT_ID`. No new environment variables are needed.
 2. On the existing API Gateway HTTP API, attach these POST routes to the same
    Lambda proxy integration (payload 2.0): `/api/explore/plays/start` and
-   `/api/explore/plays/progress`. Keep Express Cognito verification; gateway
+   `/api/explore/plays/progress`, plus `/api/explore/songs/{id}/playback` for
+   retained uploads/recordings. Keep Express Cognito verification; gateway
    authorization NONE matches the existing setup. Deploy if not automatic.
 3. Retain exact frontend CORS origins, POST, Authorization and Content-Type in
    Gateway and `CORS_ORIGINS`. Existing role/table access must support Query,
@@ -76,11 +107,17 @@ preview player, Songs/ExplorePage, `tapeAdder.ts` and AddToTapeDialog.
    named new tape, save conflict/retry, reload and playback. Rankings refresh
    after a count/focus and every 15 seconds; other Lambda instances may retain
    their 15-second catalog cache briefly.
+6. In account A publish a tape with an upload and a recording. In account B add
+   both to a saved tape. Make A's tape private, refresh and replay B's tape. It must
+   still play both tracks while Discover no longer lists them. In account C,
+   hidden-song playback and new saves using those IDs must fail. Test sign-out
+   and account changes; guests cannot play the withdrawn audio.
 
 Agents made no AWS changes and have not verified live global counts. Run
 `npm run test:discover`, `npm run test:explore`, `npm run test:cassette-frontend`,
 `npm run test:audio`, root typecheck and build for offline validation.
-Implementation validation passed: 119 tests across those four suites, root
+Implementation validation passed: 166 tests across those four suites plus
+`test:cassette-api` and `test:media-api`, root
 typecheck, production build and backend ZIP packaging with offline handler smoke
 checks. Browser interaction and the deployed AWS integration still need the
 manual checks above. The frontend build retains bundle-size/dynamic-import warnings.

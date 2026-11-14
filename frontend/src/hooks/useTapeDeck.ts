@@ -21,7 +21,7 @@ import { playSfx, startWinding } from '@/audio/sfx';
 import { createPlaybackController } from '@/audio/playbackController';
 import { MediaPlaybackError, playAudioSource, playbackFailureMessage } from '@/audio/mediaPlayback';
 import { playbackDiagnostic, probePlaybackSource, type PlaybackDiagnostic } from '@/audio/playbackDiagnostics';
-import { subscribeMediaAccount } from '@/auth/mediaContext';
+import { getMediaAccount, subscribeMediaAccount } from '@/auth/mediaContext';
 import { watchListening } from '@/audio/listeningRuntime';
 
 /** How many times faster than real time FF / REW move through the tape. */
@@ -54,6 +54,12 @@ export interface TapeDeck {
 const playable = (t: Track) => Boolean(t.audioUrl || t.audioReference);
 
 async function resolveUrl(cassetteId: string, track: Track, signal: AbortSignal): Promise<{ url: string; expiresAt?: number }> {
+  if (track.source === 'community' && track.sourceId && getMediaAccount()) {
+    const { api } = await import('@/api/client');
+    const { url } = await api.sharedSongs.playback(track.sourceId, signal, cassetteId);
+    // Obtain a fresh grant each start; never persist or indefinitely cache presigned URLs.
+    return { url, expiresAt: Date.now() };
+  }
   if (track.audioReference) {
     const { audioStorage } = await import('@/audio/apiAudioStorage');
     const { url, expiresAt } = await audioStorage.playback(cassetteId, track.audioReference, signal);

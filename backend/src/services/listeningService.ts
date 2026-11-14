@@ -1,6 +1,7 @@
 import { LISTENING_MAX_MS, LISTENING_THRESHOLD_MS, mediaObjectKey, validListeningSelector, validPlayId, type ListeningProgressResponse, type StartListeningResponse, type MusicTrack } from '@runman/shared';
 import { HttpError } from '../middleware/errorHandler.js';
 import { publicSongId } from './publishService.js';
+import { createSharedSongAccess } from './sharedSongAccess.js';
 import type { PublicCatalogRepository } from './publicCatalogRepository.js';
 import { listeningSongKey, type ListeningRepository, type ListeningSong } from './listeningRepository.js';
 
@@ -22,7 +23,7 @@ export function createListeningService(repository: ListeningRepository, catalog:
       } else {
         const id = selector.provider === 'media' ? publicSongId(owner, mediaObjectKey(owner, selector.id)) : selector.id;
         const row = await catalog.getSong(id);
-        if (!row) return { eligible: false }; // Never publish or count a private recording.
+        if (!row || !await createSharedSongAccess(catalog).canPlay(owner, id)) return { eligible: false };
         song = { provider: 'explore', id: row.id, title: row.title, artist: row.artist, durationSec: row.durationSec, ...(row.artworkUrl ? { artworkUrl: row.artworkUrl } : {}) };
       }
       const previous = await repository.start({ owner, playId: body.playId, song, createdAt, revision: 0, listenedMs: 0, counted: false });

@@ -6,7 +6,7 @@ import { createCassetteCursor } from './cassetteCursor.js';
 import type { MediaAuthorizer } from './mediaService.js';
 import type { CassettePayload, StoredAudioReference } from '@runman/shared';
 
-export function createCassettesService(repository: CassetteRepository, cursor: ReturnType<typeof createCassetteCursor>, clock = () => new Date().toISOString(), authorizeAudio?: MediaAuthorizer) {
+export function createCassettesService(repository: CassetteRepository, cursor: ReturnType<typeof createCassetteCursor>, clock = () => new Date().toISOString(), authorizeAudio?: MediaAuthorizer, retainSong?: (owner: string, id: string, cassetteId?: string) => Promise<void>) {
   function valid<T>(result: CassetteValidationResult<T>): T {
     if (!result.ok) throw new HttpError(400, 'Invalid cassette request.', result.issues);
     return result.value;
@@ -71,6 +71,13 @@ export function createCassettesService(repository: CassetteRepository, cursor: R
       if (request.expectedRevision >= Number.MAX_SAFE_INTEGER) throw new HttpError(400, 'Cassette revision cannot be incremented safely.');
       return storage(async () => {
         await authorize(owner, [request.cassette]);
+        // Establish durable access while a shared song is listed. Old grants remain valid
+        // after withdrawal. This applies to every save path, including copied public tapes.
+        const songs = new Set(request.cassette.tracks.flatMap((track) => track.provider === 'explore' ? [track.sourceId] : []));
+        for (const song of songs) {
+          if (!retainSong) throw new HttpError(503, 'Shared song saving is not configured.');
+          await retainSong(owner, song, pathId);
+        }
         return { cassette: publicDocument(await repository.save(owner, request, clock()), pathId) };
       });
     },

@@ -19,6 +19,8 @@ import { createListeningService, type ListeningService } from '../services/liste
 import { createMemoryListeningRepository, type ListeningRepository } from '../services/listeningRepository.js';
 import { createDynamoListeningRepository } from '../aws/dynamoListening.js';
 import { getJamendoTrack } from '../services/jamendoService.js';
+import { createSharedSongAccess } from '../services/sharedSongAccess.js';
+import type { CassetteRepository } from '../services/cassetteRepository.js';
 
 function parseInteger(value: unknown, fallback: number): number {
   if (value === undefined) return fallback;
@@ -42,7 +44,7 @@ function boundedLimit(value: unknown, fallback: number, max: number): number {
   return limit;
 }
 
-export function createExploreRouter(service: ExploreService, publishing?: { publisher: PublishService; auth: RequestHandler; listening?: ListeningService }) {
+export function createExploreRouter(service: ExploreService, publishing?: { publisher: PublishService; auth: RequestHandler; listening?: ListeningService; access?: ReturnType<typeof createSharedSongAccess> }) {
   const router = Router();
 
   router.get('/songs', async (req, res) => {
@@ -101,6 +103,7 @@ export function createExploreRouter(service: ExploreService, publishing?: { publ
     const off = (_req: unknown, _res: unknown, next: (error: unknown) => void) => next(new HttpError(503, 'Explore publishing is not configured for this environment.'));
     router.use('/mine', off);
     router.post('/songs/:id/adds', off);
+    router.post('/songs/:id/playback', off);
     router.post('/plays/start', off); router.post('/plays/progress', off);
     return router;
   }
@@ -112,6 +115,17 @@ export function createExploreRouter(service: ExploreService, publishing?: { publ
     next(new HttpError(kind === 'entity.too.large' ? 413 : 400, kind === 'entity.too.large' ? 'Publish request is too large.' : 'Malformed JSON request.'));
   });
   const owner = (res: Response) => res.locals.cassetteOwner as string;
+  router.post('/songs/:id/playback', auth, async (req, res) => {
+    const id = String(req.params.id);
+    if (!ID_PATTERN.test(id)) throw new HttpError(400, 'Invalid song id');
+    const cassetteId = req.query.cassetteId;
+    if (cassetteId !== undefined && (typeof cassetteId !== 'string' || !ID_PATTERN.test(cassetteId))) throw new HttpError(400, 'Invalid cassette id');
+    if (!publishing.access || !await publishing.access.canPlay(owner(res), id, cassetteId)) throw new HttpError(404, 'This song is not available to this account.');
+    const url = await service.audioUrl(id, true);
+    if (!url) throw new HttpError(404, 'This song has no audio');
+    res.set('Cache-Control', 'no-store');
+    res.json({ url });
+  });
   // Authentication runs before the larger body parser.
   router.use('/mine', auth, body);
   router.put('/mine/profile', async (req, res) => { res.json(await publisher.publishProfile(owner(res), req.body)); });
@@ -148,6 +162,7 @@ export interface ExploreApiOptions {
   listeningRepository?: ListeningRepository;
   jamendoLookup?: typeof getJamendoTrack;
   listeningClock?: () => number;
+  cassettes?: CassetteRepository;
 }
 
 /**
@@ -173,5 +188,5 @@ export function createExploreApi(options: ExploreApiOptions = {}) {
   const publisher = createPublishService(repository, { authorizeAudio: media?.authorize, clock: options.clock, onChange: () => source.invalidate() });
   const verifier = options.verifier ?? cachedAccessTokenVerifier(settings.userPoolId!, settings.clientId!);
   const listening = createListeningService(listeningRepository, repository, { jamendo, clock: options.listeningClock, changed: () => source.invalidate() });
-  return createExploreRouter(createExploreService(source), { publisher, auth: cassetteAuth(verifier), listening });
+  return createExploreRouter(createExploreService(source), { publisher, auth: cassetteAuth(verifier), listening, access: createSharedSongAccess(repository, options.cassettes) });
 }

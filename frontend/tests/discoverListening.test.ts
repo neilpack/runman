@@ -7,6 +7,7 @@ import { createCassetteStore } from '../src/cassettes/store';
 import { CassetteApiError, type CassetteApi } from '../src/api/cassetteClient';
 import { createTapeAdder } from '../src/components/explore/tapeAdder';
 import { trackFromPublicSong, tapeFit } from '../src/components/explore/addToTape';
+import { createSharedSongApi } from '../src/api/sharedSongClient';
 
 const track: Track = { id: 'track', source: 'library', sourceId: '7', title: 'Song', artist: 'Artist', durationSec: 60, side: 'A' };
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
@@ -46,6 +47,23 @@ test('listening client checks account generation again after token refresh', asy
   let generation = 1; let requests = 0;
   const api = createListeningApi({ baseUrl: '', account: () => ({ owner: 'alice', generation }), token: async () => { generation = 2; return { sub: 'alice', token: 'offline', expiresAt: Date.now() / 1000 + 600 }; }, fetcher: async () => { requests++; return new Response('{}'); } });
   await assert.rejects(api.start({ owner: 'alice', generation: 1 }, 'play', { provider: 'jamendo', id: '7' }, new AbortController().signal), { name: 'AbortError' }); assert.equal(requests, 0);
+});
+
+test('shared playback uses authenticated no-store resolution and rejects late results after account changes', async () => {
+  let generation = 1; let switchOnFetch = false; let requested = '';
+  const client = createSharedSongApi({ baseUrl: 'https://api.example', account: () => ({ owner: 'alice', generation }),
+    token: async () => ({ sub: 'alice', token: 'offline-token', expiresAt: Date.now() / 1000 + 60 }),
+    fetcher: async (url, init) => {
+      requested = String(url); assert.equal(init?.method, 'POST'); assert.equal(init?.cache, 'no-store'); assert.equal(init?.credentials, 'omit');
+      assert.equal((init?.headers as Record<string, string>).Authorization, 'Bearer offline-token');
+      if (switchOnFetch) generation++;
+      return new Response(JSON.stringify({ url: 'https://bucket.example/signed' }));
+    },
+  });
+  assert.deepEqual(await client.playback('song', new AbortController().signal, 'saved-tape'), { url: 'https://bucket.example/signed' });
+  assert.equal(requested, 'https://api.example/api/explore/songs/song/playback?cassetteId=saved-tape');
+  switchOnFetch = true;
+  await assert.rejects(client.playback('song', new AbortController().signal), { name: 'AbortError' });
 });
 
 test('an unavailable analytics API backs off and never blocks the audio sampling loop', async () => {
