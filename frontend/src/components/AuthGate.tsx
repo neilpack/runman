@@ -2,7 +2,7 @@
 import { sessionStore } from '@/auth/session';
 import { SessionGuard } from '@/auth/SessionGuard';
 import { useSession } from '@/hooks/useSession';
-import { DashboardPage } from '@/pages/DashboardPage';
+import { AccountPage } from '@/pages/AccountPage';
 import { Button } from './Button';
 import { Card } from './Card';
 
@@ -16,9 +16,8 @@ export function AuthGate() {
     <SessionGuard authStatus={session.status === 'signedIn' ? 'authenticated' : session.status} route={session.status === 'signedIn' ? 'authenticated' : session.status} userId={session.user?.userId}>
       {session.user && (
         <div className="page" key={session.user.userId}>
-          <div className="session-actions"><span>{session.user.signInDetails?.loginId ?? 'Your account'}</span><Button variant="secondary" onClick={() => { void sessionStore.signOut(); }}>Sign out</Button></div>
           {session.error && <p className="error" role="alert">{session.error}</p>}
-          <DashboardPage user={session.user} />
+          <AccountPage user={session.user} />
         </div>
       )}
     </SessionGuard>

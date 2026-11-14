@@ -1,13 +1,13 @@
 // All app routes. To add a page: create it in src/pages, then add it here and to NAV_LINKS in Layout.
 
-import { createBrowserRouter } from 'react-router';
+import { createBrowserRouter, Navigate } from 'react-router';
 import { lazy, Suspense } from 'react';
 import { Layout } from './components/Layout';
 import { WelcomePage } from './pages/WelcomePage';
 import { LoginPage } from './pages/LoginPage';
-import { HomePage } from './pages/HomePage';
 import { LibraryPage } from './pages/LibraryPage';
 import { EditCassettePage } from './pages/EditCassettePage';
+import { ExplorePage } from './pages/ExplorePage';
 import { AboutPage } from './pages/AboutPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
@@ -22,15 +22,17 @@ export const router = createBrowserRouter([
     children: [
       { path: '/library', element: <LibraryPage /> },
       { path: '/cassettes/:id/edit', element: <EditCassettePage /> },
-      { path: '/status', element: <HomePage /> },
       {
-        path: '/dashboard',
+        path: '/account',
         element: (
           <Suspense fallback={<p role="status">Loading sign-in…</p>}>
             <AuthGate />
           </Suspense>
         ),
       },
+      // The dashboard became the Account page; keep old links working.
+      { path: '/dashboard', element: <Navigate to="/account" replace /> },
+      { path: '/explore', element: <ExplorePage /> },
       { path: '/about', element: <AboutPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],

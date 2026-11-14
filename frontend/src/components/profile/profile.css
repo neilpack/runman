@@ -1,0 +1,92 @@
+/* Avatars and public profile cards. Uses theme tokens from styles/global.css. */
+
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--color-bg);
+  border: 2px solid var(--color-surface);
+  box-shadow: 0 0 0 1px var(--color-border);
+}
+
+.avatar-fallback {
+  font-family: var(--font-display);
+  font-synthesis: none;
+  color: #fff;
+  background: hsl(var(--avatar-hue, 210) 55% 46%);
+  user-select: none;
+}
+
+.profile-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 360px;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+}
+
+.profile-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.profile-card-name {
+  margin: 0;
+  font-size: 1.15rem;
+  overflow-wrap: anywhere;
+}
+
+.profile-card-fav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.profile-kicker {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.profile-card-tape {
+  container-type: inline-size;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: var(--radius);
+}
+
+.profile-card-tape:focus-visible {
+  outline: 2px solid var(--brand-accent);
+  outline-offset: var(--space-1);
+}
+
+.profile-card-meta,
+.profile-card-empty {
+  margin: 0;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+/* Small avatar inside the Account nav tab. */
+.nav-link:has(.nav-avatar) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nav-avatar {
+  border-width: 1px;
+}
