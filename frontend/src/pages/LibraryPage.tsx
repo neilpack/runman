@@ -21,6 +21,7 @@ import { useTapeDeck } from '@/hooks/useTapeDeck';
 import { playSfx } from '@/audio/sfx';
 import { AudioInput, type UploadedAudioMetadata } from '@/components/AudioInput';
 import { SIDE_CAPACITY_SEC } from '@/components/cassette/constants';
+import { PlaybackDiagnostics } from '@/components/PlaybackDiagnostics';
 import './library.css';
 
 type Zone = 'player' | 'edit' | 'drawer' | null;
@@ -465,6 +466,7 @@ function LibraryStudio() {
         </div>
 
         {/* The anchor never moves, so hit-testing works even while the pad is still sliding in. */}
+        {deck.diagnostic && <PlaybackDiagnostics diagnostic={deck.diagnostic} onDismiss={deck.clearDiagnostic} />}
         <div ref={editRef} className="edit-anchor">
           <div className={`edit-pad${held ? ' visible' : ''}${zone === 'edit' ? ' hover' : ''}`}>
             <svg viewBox="0 0 24 24" aria-hidden="true">

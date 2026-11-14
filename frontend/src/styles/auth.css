@@ -391,6 +391,29 @@
 }
 
 @media (max-width: 600px) {
+  /* Phone header: wordmark on top, then the two section links and Log in on one row */
+  .welcome-header {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 12px 16px;
+    padding: 16px;
+  }
+
+  .welcome-brand {
+    flex-basis: 100%;
+    text-align: center;
+  }
+
+  .welcome-nav {
+    gap: 4px 16px;
+    justify-content: flex-start;
+  }
+
+  .welcome-login {
+    padding: 8px 14px;
+  }
+
   /* Center the copy and small cassette in the remaining space */
   .welcome-hero {
     justify-content: center;
@@ -417,17 +440,19 @@
 
 @media (max-width: 380px) {
   .welcome-nav {
-    flex-direction: column;
-    align-items: center;
+    gap: 4px 12px;
   }
 
-  .welcome-cta,
+  .welcome-nav-link,
   .welcome-login {
+    letter-spacing: 0.08em;
+  }
+
+  .welcome-cta {
     width: 100%;
     text-align: center;
   }
 
-  .welcome-actions,
   .welcome-copy {
     width: 100%;
   }

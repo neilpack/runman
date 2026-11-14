@@ -1,0 +1,284 @@
+/* About + Contact under the welcome hero. About continues the light "desk" the hero ends on;
+   Contact goes back to the dark hero background. Colours come from the --brand-* tokens. */
+
+.ws-section {
+  padding: clamp(56px, 9vw, 112px) clamp(16px, 6vw, 64px);
+  /* A focused section (after a header link) shouldn't draw a big outline box. */
+  outline: none;
+}
+
+.ws-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.ws-eyebrow {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--brand-accent);
+}
+
+.ws-title {
+  margin: 0 0 var(--space-4);
+  max-width: 20ch;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 4.2vw, 3.2rem);
+  font-weight: 400;
+  font-synthesis: none;
+  line-height: 1.1;
+}
+
+.ws-lead {
+  margin: 0 0 var(--space-8);
+  max-width: 62ch;
+  font-size: clamp(1rem, 1.4vw, 1.15rem);
+  line-height: 1.7;
+}
+
+/* ---------- About ---------- */
+.ws-about {
+  background: var(--brand-background);
+  color: var(--brand-primary-deep);
+}
+
+.ws-features {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin: 0 0 var(--space-8);
+  padding: 0;
+  list-style: none;
+}
+
+.ws-feature {
+  padding: var(--space-6);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgb(23 54 81 / 0.1);
+}
+
+.ws-feature-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: var(--space-4);
+  border-radius: 12px;
+  background: var(--brand-primary-deep);
+  color: #fff;
+}
+
+.ws-feature-icon svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ws-feature h3 {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 400;
+}
+
+.ws-feature p {
+  margin: 0;
+  line-height: 1.6;
+  color: var(--brand-primary-dark);
+}
+
+/* Reuses the hero's .welcome-cta button, in the dark colours for the light background. */
+.welcome-cta.ws-cta {
+  background: var(--brand-primary-deep);
+  color: #fff;
+}
+
+.welcome-cta.ws-cta:hover {
+  background: var(--brand-accent);
+}
+
+/* ---------- Contact ---------- */
+.ws-contact {
+  background: linear-gradient(to right, var(--brand-dark-background), var(--brand-dark-background-light));
+  color: #fff;
+}
+
+.ws-contact-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: clamp(32px, 6vw, 80px);
+  align-items: start;
+}
+
+.ws-direct {
+  margin: 0;
+  color: var(--brand-gray-light);
+}
+
+.ws-direct a {
+  color: #fff;
+  text-decoration-color: var(--brand-accent);
+  text-underline-offset: 3px;
+}
+
+.ws-form {
+  display: grid;
+  gap: var(--space-2);
+  padding: clamp(20px, 3vw, 32px);
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 14px;
+  background: rgb(255 255 255 / 0.05);
+}
+
+.ws-form label {
+  margin-top: var(--space-2);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ws-form label:first-child {
+  margin-top: 0;
+}
+
+.ws-form input,
+.ws-form textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid rgb(255 255 255 / 0.2);
+  border-radius: 8px;
+  background: rgb(0 0 0 / 0.3);
+  color: #fff;
+  /* 16px stops iOS Safari zooming in when a field is focused. */
+  font: inherit;
+  font-size: 1rem;
+}
+
+.ws-form textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+.ws-form input:focus,
+.ws-form textarea:focus {
+  border-color: var(--brand-accent);
+  outline: none;
+}
+
+.welcome-cta.ws-send {
+  justify-self: start;
+  margin-top: var(--space-4);
+  border: none;
+  cursor: pointer;
+}
+
+.welcome-cta.ws-send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.ws-form-note {
+  margin: var(--space-2) 0 0;
+  font-size: 0.85rem;
+  color: var(--brand-gray-light);
+}
+
+/* ---------- Footer ---------- */
+.ws-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-6) clamp(16px, 6vw, 64px);
+  background: var(--brand-dark-background);
+  color: var(--brand-gray);
+  font-size: 0.85rem;
+}
+
+.ws-footer a {
+  color: #fff;
+  text-decoration: none;
+}
+
+.ws-footer a:hover {
+  color: var(--brand-accent);
+}
+
+/* ---------- Responsive (same breakpoints as styles/auth.css) ---------- */
+@media (max-width: 1024px) {
+  /* Tablet: feature cards two by two */
+  .ws-features {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 820px) {
+  /* Tablet portrait: contact text above the form, everything centred like the hero */
+  .ws-contact-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ws-section {
+    text-align: center;
+  }
+
+  .ws-title,
+  .ws-lead {
+    margin-inline: auto;
+  }
+
+  .ws-form {
+    text-align: left;
+  }
+
+  .welcome-cta.ws-send {
+    justify-self: stretch;
+    text-align: center;
+  }
+}
+
+@media (max-width: 600px) {
+  /* Phone: one card per row, icon beside the heading to save height */
+  .ws-features {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+  }
+
+  .ws-feature {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: var(--space-3);
+    align-items: center;
+    padding: var(--space-4);
+    text-align: left;
+  }
+
+  .ws-feature-icon {
+    margin: 0;
+  }
+
+  .ws-feature p {
+    grid-column: 1 / -1;
+    margin-top: var(--space-2);
+  }
+
+  .welcome-cta.ws-cta {
+    display: block;
+    text-align: center;
+  }
+
+  .ws-footer {
+    justify-content: center;
+    text-align: center;
+  }
+}

@@ -19,7 +19,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present && npm run typecheck:amplify",
     "typecheck:amplify": "tsc -p amplify/tsconfig.json",
     "test:auth": "tsc -p frontend/tsconfig.test.json && tsx --tsconfig frontend/tsconfig.test.json --test frontend/tests/auth.test.tsx frontend/tests/authFlows.test.ts",
-    "test:audio": "tsc -p frontend/tsconfig.test.json && tsx --tsconfig frontend/tsconfig.test.json --test frontend/tests/audioStorage.test.ts frontend/tests/mediaClient.test.ts frontend/tests/playbackController.test.ts frontend/tests/recordAudio.test.ts",
+    "test:audio": "tsc -p frontend/tsconfig.test.json && tsx --tsconfig frontend/tsconfig.test.json --test frontend/tests/audioStorage.test.ts frontend/tests/mediaClient.test.ts frontend/tests/playbackController.test.ts frontend/tests/mediaPlayback.test.ts frontend/tests/playbackDiagnostics.test.ts frontend/tests/recordAudio.test.ts",
     "test:account": "tsc -p frontend/tsconfig.test.json && tsx --tsconfig frontend/tsconfig.test.json --test frontend/tests/account.test.ts",
     "test:legacy-api": "tsc -p backend/tsconfig.test.json && tsx --tsconfig backend/tsconfig.test.json --test backend/tests/legacyExamples.test.ts",
     "test:cassettes": "tsc -p shared/tsconfig.test.json && tsx --tsconfig shared/tsconfig.test.json --test shared/tests/cassettes.test.ts",
