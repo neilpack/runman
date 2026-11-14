@@ -1,0 +1,165 @@
+/* Floating Walkman on every page but the Library (NowPlayingDock). It hugs the right edge of the
+   screen: an arrow tab on its left tucks the player away, leaving just the tab.
+   Colours come from the studio tokens (.studio-vars on the dock). */
+
+.np-dock {
+  --np-zoom: 0.62;
+  position: fixed;
+  z-index: 60;
+  right: 0;
+  bottom: 18px;
+  display: flex;
+  align-items: center;
+  max-height: calc(100svh - 36px);
+  color: var(--studio-text);
+  pointer-events: none; /* Only the tab and panel catch the pointer, not the gap around them. */
+}
+
+.np-dock > * {
+  pointer-events: auto;
+}
+
+/* ---- Arrow tab ---- */
+.np-toggle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 30px;
+  padding: 14px 0;
+  border: none;
+  border-radius: 12px 0 0 12px;
+  background: var(--studio-panel-2);
+  color: var(--studio-text);
+  box-shadow: -6px 8px 20px rgb(0 0 0 / 0.45);
+  cursor: pointer;
+}
+
+.np-toggle svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.np-toggle:hover {
+  color: #ff7a1a;
+}
+
+.np-toggle:focus-visible {
+  outline: 2px solid #ff7a1a;
+  outline-offset: 2px;
+}
+
+/* A tiny reel on the tucked-away tab, turning while the tape plays. */
+.np-reel {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 3px dotted #ff7a1a;
+}
+
+.np-reel.turning {
+  animation: np-turn 1.4s linear infinite;
+}
+
+@keyframes np-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---- Player panel ---- */
+.np-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px 12px;
+  border-radius: 16px 0 0 16px;
+  background: linear-gradient(180deg, var(--studio-panel-2), var(--studio-panel));
+  box-shadow: -10px 14px 32px rgb(0 0 0 / 0.5);
+  overflow-y: auto;
+  max-height: calc(100svh - 36px);
+  animation: np-slide-in 0.22s ease-out;
+}
+
+.np-panel[hidden] {
+  display: none;
+}
+
+@keyframes np-slide-in {
+  from {
+    transform: translateX(40px);
+    opacity: 0;
+  }
+}
+
+.np-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* Same width as the shrunken Walkman under it. */
+  width: calc(340px * var(--np-zoom));
+  font-size: 0.75rem;
+}
+
+.np-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--studio-muted);
+}
+
+.np-dot.live {
+  background: #a3e635;
+  box-shadow: 0 0 8px #a3e635;
+}
+
+.np-title {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.np-open {
+  flex: none;
+  color: var(--studio-muted);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.np-open:hover {
+  color: #ff7a1a;
+}
+
+/* The Library's full Walkman, shrunk. Beats walkman.css's own screen-size zoom. */
+.np-walkman .walkman-wrap {
+  zoom: var(--np-zoom);
+}
+
+/* Tablets and phones: a touch bigger so the keys are easier to tap. */
+@media (max-width: 1024px) {
+  .np-dock {
+    --np-zoom: 0.66;
+  }
+}
+
+@media (max-width: 760px) {
+  .np-dock {
+    --np-zoom: 0.7;
+    bottom: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .np-reel.turning,
+  .np-panel {
+    animation: none;
+  }
+}
