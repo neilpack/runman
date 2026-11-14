@@ -53,14 +53,14 @@ export function createPublishService(repository: PublicCatalogRepository, option
     const tapes = (await repository.listTapes()).filter((t) => t.owner.userId === owner);
     return new Set(tapes.flatMap(songIdsOf));
   }
-  /** Deletes the owner's unlisted songs among `candidates` that no public tape of theirs uses any more. */
+  /** Deletes the owner's songs among `candidates` that no public tape of theirs uses any more. */
   async function dropUnusedSongs(owner: string, candidates: string[]) {
     if (!candidates.length) return;
     const used = await tapeSongIds(owner);
     for (const id of new Set(candidates)) {
       if (used.has(id)) continue;
       const song = await repository.getSong(id);
-      if (song && song.ownerId === owner && !song.listed) await repository.deleteSong(id, owner);
+      if (song && song.ownerId === owner) await repository.deleteSong(id, owner);
     }
   }
   function cassetteId(value: string) {
@@ -107,8 +107,8 @@ export function createPublishService(repository: PublicCatalogRepository, option
 
     /**
      * Publishes the whole tape: its look and every track. Jamendo and Explore tracks are kept as they
-     * are. The owner's own uploads/recordings, public or private, become Explore tracks backed by an
-     * unlisted song row, so anyone viewing the tape can play them without them appearing in song lists.
+     * are. The owner's own uploads/recordings become Explore songs (listed under Explore → Songs), so
+     * anyone can play them; they come down again when no public tape of the owner's uses them.
      * Without private audio storage those tracks can't stream, so they are left off.
      */
     async publishTape(owner: string, pathId: string, body: unknown): Promise<PublishTapeResponse> {
@@ -127,7 +127,7 @@ export function createPublishService(repository: PublicCatalogRepository, option
           const song = await repository.putSong({
             id: publicSongId(owner, track.audio.objectKey), ownerId: owner, uploaderUsername: profile.username,
             title: track.title, artist: track.artist, durationSec: track.durationSec, audio: track.audio,
-            ...(track.artworkUrl ? { artworkUrl: track.artworkUrl } : {}), listed: false,
+            ...(track.artworkUrl ? { artworkUrl: track.artworkUrl } : {}), listed: true,
           }, now);
           const { audio: _audio, provider: _provider, source: _source, visibility: _visibility, sourceId: _sourceId, ...details } = track;
           tracks.push({ ...details, source: 'community', provider: 'explore', sourceId: song.id, hasAudio: true });

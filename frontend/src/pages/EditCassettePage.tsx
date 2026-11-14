@@ -692,9 +692,8 @@ function Editor({ cassette, onDone }: { cassette: Cassette; onDone: (cassetteSav
               />
               <p className="settings-note studio-muted">
                 {visibilityOf(cassette) === 'public'
-                  ? 'Anyone can view and play this whole tape on Explore, including your uploads and recordings, and add it to their library'
-                  : 'Only you can see this tape'}{' '}
-                {/* Marking a song public as well lists it on its own under Explore → Songs. */}
+                  ? 'Anyone can find this whole tape on Explore, play every song on it (your uploads and recordings too) and add it to their library. Shared when you leave the editor.'
+                  : 'Only you can see this tape and the songs on it.'}
               </p>
               {visibilityOf(cassette) === 'public' && account.status === 'ready' && !account.profile?.hasUsername && (
                 <p className="settings-note" role="note">

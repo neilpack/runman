@@ -267,3 +267,12 @@ private unlists it while a public tape still uses it, otherwise deletes it. Repu
 unpublishing a tape deletes unlisted songs no remaining public tape of that owner uses. Rows
 without `listed` read as listed. Explore has a **Tapes** tab, `/explore/tapes/:id` (preview tracks,
 "Add to my library" via `cassetteFromPublicTape`), and listener pages list public tapes.
+
+### Tape-only visibility — 2026-11-14
+
+Per-song public/private was removed from the UI: visibility belongs to the whole tape. A public
+tape publishes every track; its uploads/recordings become **listed** songs (they show under Explore
+→ Songs and link back to the tape's owner). When a tape goes private, is deleted, or drops a track,
+any of the owner's songs no remaining public tape uses are deleted. `publicSync.ts` now only sends
+profile + tape / tape removal. `PUT`/`DELETE /api/explore/mine/songs` remain on the server but the
+frontend no longer calls them; stored track `visibility` values are ignored.
