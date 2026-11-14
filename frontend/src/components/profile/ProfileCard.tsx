@@ -1,5 +1,6 @@
 // A listener's public profile: picture, username, and their favorite tape (click to flip it over).
-// Used for the "how others see you" preview, and by Explore once other profiles can be fetched.
+// Used for the "how others see you" preview on Account. Explore's listener page (pages/ListenerPage.tsx)
+// shows the same data at full size.
 
 import { useState } from 'react';
 import type { TapeSide } from '@runman/shared';

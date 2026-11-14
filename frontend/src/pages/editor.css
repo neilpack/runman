@@ -382,29 +382,32 @@
 }
 
 /* ---- Tracklist ---- */
+/* The fill is a background layer sized by --pct rather than a positioned child: inside the
+   tilted, sticky notepad panel a positioned fill didn't always paint at its real width. */
 .tape-meter {
-  position: relative;
+  --meter-fill: linear-gradient(90deg, #9a3412, #ea580c);
   height: 26px;
   border-radius: 999px;
-  background: #0f0f11;
-  overflow: hidden;
-}
-
-.tape-meter-fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  background: linear-gradient(90deg, #7c2d12, #c2410c);
-  transition: width 0.3s;
+  background:
+    var(--meter-fill) 0 0 / var(--pct, 0%) 100% no-repeat,
+    #1c1917;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+  transition: background-size 0.3s;
 }
 
 .tape-meter span {
-  position: relative;
   display: block;
   text-align: center;
   line-height: 26px;
   font-family: 'Space Mono', ui-monospace, monospace;
   font-size: 0.75rem;
+  font-weight: 700;
   letter-spacing: 0.1em;
+  /* White with a dark halo reads on both the orange fill and the dark empty part. */
+  color: #fff;
+  text-shadow:
+    0 0 3px rgba(0, 0, 0, 0.9),
+    0 1px 2px rgba(0, 0, 0, 0.9);
 }
 
 .tracks-empty {
@@ -576,6 +579,32 @@
 
 .picker .panel-head h2 {
   font-size: 1rem;
+}
+
+/* ---- 30-minute side limit ---- */
+.picker-remaining {
+  margin-left: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  font-family: 'Space Mono', ui-monospace, monospace;
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--studio-muted);
+  white-space: nowrap;
+}
+
+.picker-remaining.low {
+  color: #fca5a5;
+}
+
+.track-row.too-long .track-meta,
+.track-row.too-long .track-time {
+  opacity: 0.5;
+}
+
+.tape-meter.full {
+  --meter-fill: linear-gradient(90deg, #991b1b, #dc2626);
 }
 
 .picker .studio-input {

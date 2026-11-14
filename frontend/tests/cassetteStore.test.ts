@@ -54,6 +54,21 @@ test('merged upload UI tracks and references remain local when private-audio API
   assert.deepEqual(store.get(local.id)?.tracks, [upload]);
 });
 
+test('Explore community tracks survive draft updates and fail cloud save explicitly without dropping tracks', async () => {
+  let saves = 0;
+  const { store } = harness({ save: async () => { saves++; throw new Error('Unexpected save'); } });
+  store.setSession('authenticated', 'alice'); await tick();
+  const local = store.create();
+  const community = { id: 'community-track', sourceId: 'public-song-1', source: 'community' as const, title: 'Explore song', artist: 'Artist', durationSec: 30, side: 'A' as const, audioUrl: '/api/explore/songs/public-song-1/audio' };
+  store.update(local.id, { tracks: [community] });
+  assert.deepEqual(store.get(local.id)?.tracks, [community]);
+  assert.equal(await store.save(local.id), false);
+  assert.equal(saves, 0);
+  assert.match(store.getSync().tapes[local.id].issues![0].message, /Community-song/);
+  store.setSession('hidden'); store.setSession('authenticated', 'alice'); await tick();
+  assert.deepEqual(store.get(local.id)?.tracks, [community]);
+});
+
 test('account transitions abort requests and reject stale results even after returning to the same owner', async () => {
   const pending = deferred<ListCassettesResponse>();
   let signal: AbortSignal | undefined;

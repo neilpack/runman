@@ -96,6 +96,16 @@ authorized temporary credentials when run outside Lambda.
    | PUT | `/api/cassettes/{id}` |
    | DELETE | `/api/cassettes/{id}` |
    | GET | `/api/music/search` |
+   | GET | `/api/explore/songs` |
+   | GET | `/api/explore/songs/trending` |
+   | GET | `/api/explore/songs/{id}/audio` |
+   | GET | `/api/explore/profiles` |
+   | GET | `/api/explore/profiles/{username}` |
+
+   The Explore routes were added by the newer main branch. Add them when manually
+   deploying this updated bundle; existing deployed code is not updated by Git.
+   Without an approved public catalog bucket, deployed Explore returns an empty
+   catalog rather than local demo data. S3 setup remains separate.
 
 4. Use the **`$default` stage**, with automatic deployment. Remove any catch-all
    route created by a wizard; do not expose `/api/items`.

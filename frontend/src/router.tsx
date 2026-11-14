@@ -8,6 +8,7 @@ import { LoginPage } from './pages/LoginPage';
 import { LibraryPage } from './pages/LibraryPage';
 import { EditCassettePage } from './pages/EditCassettePage';
 import { ExplorePage } from './pages/ExplorePage';
+import { ListenerPage } from './pages/ListenerPage';
 import { AboutPage } from './pages/AboutPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
@@ -16,6 +17,7 @@ const AuthGate = lazy(() => import('./components/AuthGate').then((module) => ({ 
 export const router = createBrowserRouter([
   // Signed-out screens render full-bleed, outside the app Layout.
   { path: '/', element: <WelcomePage /> },
+  { path: '/welcome', element: <WelcomePage /> },
   { path: '/login', element: <LoginPage /> },
   {
     element: <Layout />,
@@ -33,6 +35,7 @@ export const router = createBrowserRouter([
       // The dashboard became the Account page; keep old links working.
       { path: '/dashboard', element: <Navigate to="/account" replace /> },
       { path: '/explore', element: <ExplorePage /> },
+      { path: '/explore/u/:username', element: <ListenerPage /> },
       { path: '/about', element: <AboutPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],

@@ -27,6 +27,10 @@ export function cassetteToSaveRequest(cassette: Cassette, expectedRevision: numb
     const persisted = tracks.map((track, index) => {
       for (const key of Object.keys(track)) if (!trackFields.includes(key)) issues.push({ path: `cassette.tracks[${index}].${key}`, message: 'Unknown UI track field.' });
       const { source, audioUrl, audioReference, ...details } = track;
+      if (source === 'community') {
+        issues.push({ path: `cassette.tracks[${index}].source`, message: 'Community-song cloud persistence is not connected yet. The complete tape remains a local draft.' });
+        return {};
+      }
       if (details.licenseUrl !== undefined) details.licenseUrl = publicLicense(details.licenseUrl);
       if (source === 'library') {
         if (audioReference !== undefined) issues.push({ path: `cassette.tracks[${index}].audioReference`, message: 'Library tracks cannot include private audio references.' });

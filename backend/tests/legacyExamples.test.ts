@@ -70,6 +70,7 @@ test('configuration requires exact local opt-in and refuses AWS execution marker
 
 test('Jamendo test client remains local-only across every cloud marker; explicit clients are preserved', () => {
   assert.equal(readConfig({}).jamendo.clientId, '709fa152');
+  assert.equal(readConfig({}).explore.demoCatalog, true);
   assert.equal(readConfig({ NODE_ENV: 'development' }).jamendo.clientId, '709fa152');
   for (const env of [
     { NODE_ENV: 'production' },
@@ -78,6 +79,7 @@ test('Jamendo test client remains local-only across every cloud marker; explicit
     { NODE_ENV: 'development', LAMBDA_TASK_ROOT: '/var/task' },
   ]) {
     assert.equal(readConfig(env).jamendo.clientId, undefined);
+    assert.equal(readConfig(env).explore.demoCatalog, false);
     assert.equal(readConfig({ ...env, JAMENDO_CLIENT_ID: 'explicit-public-client' }).jamendo.clientId, 'explicit-public-client');
   }
 });

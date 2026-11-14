@@ -48,7 +48,8 @@ export function CassetteSaveControls({ id }: { id: string }) {
         </div>
       </div>
       {tape?.error && <p role="alert" className="cassette-save-error">{tape.error}</p>}
-      {cassette?.tracks.some((track) => track.source !== 'library') && <p>Uploaded and recorded tracks stay in this device’s draft until private audio saving is connected. Your complete tape is kept.</p>}
+      {cassette?.tracks.some((track) => track.source === 'upload' || track.source === 'recording') && <p>Uploaded and recorded tracks stay in this device’s draft until private audio saving is connected. Your complete tape is kept.</p>}
+      {cassette?.tracks.some((track) => track.source === 'community') && <p>Community-song cloud saving is not connected yet. Your complete tape stays in this device’s draft.</p>}
       {tape?.issues && tape.issues.length > 0 && <ul className="cassette-save-error">{tape.issues.slice(0, 8).map((issue, index) => <li key={index}>{issue.path}: {issue.message}</li>)}</ul>}
       {sync.storageError && <p role="alert">{sync.storageError}</p>}
       <ConfirmDialog open={confirmReload} title="Replace this draft with the saved tape?"

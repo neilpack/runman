@@ -184,3 +184,15 @@ multi-page pagination, or private-audio rejection from those confirmations. Thos
 paths have offline coverage but still need targeted live testing if required.
 Audio/S3 authorization remains a separate follow-up; agents made no AWS resource
 changes. Preserve the user's uncommitted backend environment-example edit.
+
+## Merge pickup for S3 work
+
+Main through `a5801af` adds Explore community songs and real deck playback. Merge
+resolution keeps context-scoped cassette auth/drafts and restores editor focus
+without resetting the selected tape on each edit. Explore `source: community`
+tracks are retained in local drafts; cloud save returns an explicit validation
+issue until their public-song persistence contract is added. Do not silently drop
+them or reinterpret them as Jamendo/private uploads. Private uploaded/recorded
+tracks are still refused by the server pending ownership/existence authorization.
+Review the upstream public Explore S3 prefix separately from private audio paths
+before starting S3 integration. The separate audio-storage worktree is unchanged.

@@ -7,6 +7,7 @@ import { healthRouter } from './routes/health.js';
 import { itemsRouter } from './routes/items.js';
 import { musicRouter } from './routes/music.js';
 import { createCassettesRouter, type CassetteApiOptions } from './routes/cassettes.js';
+import { exploreRouter } from './routes/explore.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 
 export function createApp({ disableLegacyExamples = false, cassetteApi }: { disableLegacyExamples?: boolean; cassetteApi?: CassetteApiOptions } = {}) {
@@ -26,6 +27,7 @@ export function createApp({ disableLegacyExamples = false, cassetteApi }: { disa
   app.use('/api/health', healthRouter);
   if (allowLegacyExamples) app.use('/api/items', itemsRouter);
   app.use('/api/music', musicRouter);
+  app.use('/api/explore', exploreRouter);
 
   app.use(notFound);
   app.use(errorHandler);

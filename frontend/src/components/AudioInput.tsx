@@ -11,6 +11,15 @@ interface AudioInputProps {
   cassetteId?: string;
   /** Adopt the completed reference into the draft; cassette Save remains separate. */
   onUploaded?: (reference: StoredAudioReference, metadata: UploadedAudioMetadata) => void;
+  /** Longest clip that may be added (e.g. tape time left on a side). Longer clips can't be uploaded. */
+  maxDurationSec?: number;
+  /** What the limit belongs to, for the error message (e.g. "Side A"). */
+  limitLabel?: string;
+}
+
+function clock(sec: number): string {
+  const s = Math.max(0, Math.floor(sec));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 export interface UploadedAudioMetadata {
@@ -31,7 +40,7 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Audio could not be processed. Please try again.';
 }
 
-export function AudioInput({ cassetteId, onUploaded }: AudioInputProps) {
+export function AudioInput({ cassetteId, onUploaded, maxDurationSec, limitLabel = 'This tape' }: AudioInputProps) {
   const id = useId();
   const [draft, setDraft] = useState<DraftAudio>();
   const [preview, setPreview] = useState<string>();
@@ -50,6 +59,7 @@ export function AudioInput({ cassetteId, onUploaded }: AudioInputProps) {
   const player = useRef<HTMLAudioElement | null>(null);
   const busy = status !== 'idle';
   const canUpload = Boolean(cassetteId && onUploaded);
+  const tooLong = maxDurationSec !== undefined && durationSec > maxDurationSec;
 
   useEffect(() => {
     active.current = true;
@@ -105,7 +115,7 @@ export function AudioInput({ cassetteId, onUploaded }: AudioInputProps) {
   }
 
   async function uploadDraft() {
-    if (!draft || !cassetteId || !onUploaded || busy || uploaded) return;
+    if (!draft || !cassetteId || !onUploaded || busy || uploaded || tooLong) return;
     setError(undefined);
     setProgress(undefined);
     setStatus('uploading');
@@ -185,9 +195,9 @@ export function AudioInput({ cassetteId, onUploaded }: AudioInputProps) {
         />
       </div>}
       {canUpload && draft && <div className="audio-actions">
-        {!uploaded && <Button type="button" disabled={busy} onClick={() => { void uploadDraft(); }}>Upload audio</Button>}
+        {!uploaded && <Button type="button" disabled={busy || tooLong} onClick={() => { void uploadDraft(); }}>Upload audio</Button>}
         {status === 'uploading' && <Button type="button" variant="secondary" onClick={() => upload.current?.cancel()}>Cancel upload</Button>}
-        {uploaded && <Button type="button" disabled={adopted || busy || durationSec <= 0} onClick={() => {
+        {uploaded && <Button type="button" disabled={adopted || busy || durationSec <= 0 || tooLong} onClick={() => {
           // A throwing callback might already have changed its parent's draft.
           // Once offered to persistence, this control must never delete the file.
           setHandoffAttempted(true);
@@ -203,6 +213,9 @@ export function AudioInput({ cassetteId, onUploaded }: AudioInputProps) {
           setDraft(undefined); setUploaded(undefined); setAdopted(false); setHandoffAttempted(false);
         }}>Choose another clip</Button>}
       </div>}
+      {canUpload && draft && tooLong && !adopted && <p className="error" role="alert">
+        This clip is {clock(durationSec)}, but {limitLabel} only has {clock(maxDurationSec ?? 0)} left on the tape. Choose a shorter clip.
+      </p>}
       {!canUpload && <p className="muted">Preview is available here. Saving audio will be available when cassette saving is connected.</p>}
       {error && <p className="error" role="alert">{error}</p>}
     </div>

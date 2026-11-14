@@ -25,6 +25,7 @@ import { faceFor, patchSide, sideBHasOwnStyle, sideLook } from '@/components/cas
 import { cassetteStore, newId, useCassette, useCassetteSync } from '@/hooks/useCassettes';
 import { CassetteSaveControls } from '@/components/cassette/CassetteSaveControls';
 import { useOrbit } from '@/hooks/useOrbit';
+import type { LibraryLocationState } from './LibraryPage';
 import './editor.css';
 
 export function EditCassettePage() {
@@ -56,7 +57,9 @@ export function EditCassettePage() {
     );
   }
 
-  return <Editor key={`${sync.context}:${cassette.id}`} cassette={cassette} onDone={() => navigate('/library')} />;
+  // The library puts this tape on the pedestal when it opens (if it still exists).
+  const backToLibrary = () => navigate('/library', { state: { focusId: cassette.id } satisfies LibraryLocationState });
+  return <Editor key={`${sync.context}:${cassette.id}`} cassette={cassette} onDone={backToLibrary} />;
 }
 
 function Swatches({
