@@ -18,7 +18,9 @@
   --space-6: 24px;
   --space-8: 32px;
 
-  --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* App fonts (retro theme): Rubik for body/UI text, Righteous for headings and logos. */
+  --font: 'Rubik', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Righteous', 'Rubik', system-ui, sans-serif;
   color-scheme: light dark;
 }
 
@@ -257,4 +259,21 @@ a {
 
 .app-shell:has(.studio) .app-footer {
   display: none;
+}
+
+/* Display font: headings, logos and the big chunky labels. Righteous has a single weight,
+   so turn off faux-bold to keep its shapes clean. */
+h1,
+h2,
+h3,
+.brand,
+.wm-logo strong,
+.cf-label-band,
+.side-switch button,
+.side-mini button,
+.side-block-head,
+.drawer-create,
+.edit-pad {
+  font-family: var(--font-display);
+  font-synthesis: none;
 }
