@@ -62,6 +62,8 @@ export type TapeSide = 'A' | 'B';
 
 export interface Track {
   id: string;
+  /** Original ID from the external music source, when applicable. */
+  sourceId?: string;
   title: string;
   artist: string;
   durationSec: number;
@@ -70,6 +72,8 @@ export interface Track {
   source: 'library' | 'recording';
   /** Playable URL once the song library / recordings exist. */
   audioUrl?: string;
+  artworkUrl?: string;
+  licenseUrl?: string;
 }
 
 /** The parts of a cassette's look that can differ between side A and side B. */

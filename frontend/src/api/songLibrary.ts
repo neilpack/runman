@@ -1,13 +1,13 @@
-// Song library integration point (e.g. Jamendo, per the README).
-//
-// The Edit Cassette page's "Add songs" panel talks ONLY to this module. To wire up the real
-// library, implement `search` (and flip `available` to true); the UI needs no other changes.
+// Adapter between the editor's song picker and the backend music API.
+
+import { api } from './client';
 
 export interface SongResult {
   id: string;
   title: string;
   artist: string;
   durationSec: number;
+  licenseUrl?: string;
   audioUrl?: string;
   artworkUrl?: string;
 }
@@ -16,11 +16,45 @@ export interface SongLibrary {
   /** false = show the "coming soon" state in the UI. */
   available: boolean;
   search(query: string, signal?: AbortSignal): Promise<SongResult[]>;
+  recommend(signal?: AbortSignal): Promise<SongResult[]>;
+}
+
+const recommendationQueries = [
+  'acoustic',
+  'ambient',
+  'chill',
+  'electronic',
+  'indie',
+  'jazz',
+  'rock',
+  'soul',
+];
+
+function shuffle<T>(items: T[]): T[] {
+  const shuffled = [...items];
+  for (let i = shuffled.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
 }
 
 export const songLibrary: SongLibrary = {
-  available: false,
-  async search() {
-    return [];
+  available: true,
+  async search(query, signal) {
+    const response = await api.searchMusic(query, { limit: 20 }, signal);
+    return response.tracks.map((track) => ({
+      id: track.id,
+      title: track.name,
+      artist: track.artistName,
+      durationSec: track.duration,
+      licenseUrl: track.licenseUrl,
+      audioUrl: track.audioUrl,
+      artworkUrl: track.imageUrl,
+    }));
+  },
+  async recommend(signal) {
+    const query = recommendationQueries[Math.floor(Math.random() * recommendationQueries.length)];
+    return shuffle(await this.search(query, signal)).slice(0, 8);
   },
 };
