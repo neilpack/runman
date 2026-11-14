@@ -142,23 +142,6 @@
   transform: translateY(-1px);
 }
 
-/* The cutout's bottom edge sits behind the desk so she appears to stand behind it. */
-.welcome-photo {
-  position: absolute;
-  z-index: 1;
-  right: clamp(0px, 6vw, 120px);
-  bottom: 2vh;
-  height: 84vh;
-  width: auto;
-  max-width: 62vw;
-  object-fit: contain;
-  object-position: bottom;
-  transform: translateX(-0.5in) scale(1.2);
-  transform-origin: bottom center;
-  pointer-events: none;
-  user-select: none;
-}
-
 /* The angled "desk" along the bottom */
 .welcome-desk {
   position: absolute;
@@ -301,10 +284,11 @@
 }
 
 /* ---------- Responsive breakpoints ----------
-   > 1024px  desktop: three-column header, photo pinned bottom-right
-   <= 1024px tablet landscape: smaller photo, tighter padding
+   > 1024px  desktop: three-column header, cassette stage pinned right
+   <= 1024px tablet landscape: smaller cassette, tighter padding
    <= 820px  tablet portrait: everything stacks top to bottom in one flex column
-   <= 600px  phone: photo hidden, copy centered
+   <= 600px  phone: small cassette under centered copy
+   (cassette stage rules live in components/welcome/retroStage.css)
    <= 380px  small phone: tighter type and full-width buttons */
 
 @media (max-width: 1024px) {
@@ -314,13 +298,6 @@
 
   .welcome-copy {
     max-width: 420px;
-  }
-
-  .welcome-photo {
-    right: 0;
-    height: 70vh;
-    max-width: 55vw;
-    transform: scale(1.1);
   }
 }
 
@@ -348,7 +325,7 @@
     justify-self: auto;
   }
 
-  /* Hero: copy, then photo, top to bottom */
+  /* Hero: copy, then cassette, top to bottom */
   .welcome-hero {
     flex-direction: column;
     align-items: center;
@@ -368,16 +345,6 @@
     max-width: 30ch;
   }
 
-  .welcome-photo {
-    position: relative;
-    right: auto;
-    bottom: auto;
-    height: 50vh;
-    max-width: 100%;
-    margin-top: auto;
-    transform: none;
-  }
-
   .welcome-desk {
     height: 12vh;
   }
@@ -392,11 +359,7 @@
 }
 
 @media (max-width: 600px) {
-  .welcome-photo {
-    display: none;
-  }
-
-  /* With the photo gone, center the copy in the remaining space */
+  /* Center the copy and small cassette in the remaining space */
   .welcome-hero {
     justify-content: center;
     padding: var(--space-6) 16px 12vh;
