@@ -11,4 +11,8 @@ export const config = {
     itemsTable: process.env.ITEMS_TABLE || undefined,
     uploadsBucket: process.env.UPLOADS_BUCKET || undefined,
   },
+  jamendo: {
+    clientId: process.env.JAMENDO_CLIENT_ID || undefined,
+    apiUrl: process.env.JAMENDO_API_URL ?? 'https://api.jamendo.com/v3.0',
+  },
 } as const;
